@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="A new Flutter project.">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="addis_rent">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <!-- ========== GOOGLE SIGN-IN META TAG ========== -->
+  <!-- ADD YOUR CLIENT ID HERE -->
+  <meta name="google-signin-client_id" content="780568866636-u4587oufl909ps66ll6qmmgtqccvsrko.apps.googleusercontent.com">
+  <meta name="google-signin-scope" content="email profile">
+  <!-- ============================================ -->
+
+  <title>addis_rent</title>
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  
+  <!-- Google Sign-In Platform.js -->
+  <script src="https://apis.google.com/js/platform.js" async defer></script>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBKpBi8e5Gu6KxItFOP88sNDHG5S4Cg4_U",
+      authDomain: "addisrent-d27f4.firebaseapp.com",
+      projectId: "addisrent-d27f4",
+      storageBucket: "addisrent-d27f4.firebasestorage.app",
+      messagingSenderId: "780568866636",
+      appId: "1:780568866636:web:672403ca486b2ae91d69e9",
+      measurementId: "G-R733V4MSTC"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    
+    // Debug: Log when Google platform.js loads
+    window.onload = function() {
+      console.log('✅ Google platform.js loaded');
+      console.log('✅ Firebase initialized');
+    };
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

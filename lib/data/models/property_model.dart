@@ -19,7 +19,15 @@ class PropertyModel {
   final DateTime? updatedAt;
   final double? latitude;
   final double? longitude;
-
+  
+  // NEW FIELDS for archival system
+  final bool isArchived; // For soft delete
+  final String? archiveReason; // 'landlord_deleted', 'admin_cleaned', 'rented'
+  final DateTime? rentedAt; // When property was marked as rented
+  final DateTime? archivedAt; // When property was archived
+  final String? archivedBy; // Who archived it (landlordId or adminId)
+  final bool isDeleted; // Hard delete flag (admin only)
+   
   PropertyModel({
     required this.id,
     required this.title,
@@ -41,6 +49,15 @@ class PropertyModel {
     this.updatedAt,
     this.latitude,
     this.longitude,
+    
+    // NEW: Default values for archival fields
+    this.isArchived = false,
+    this.archiveReason,
+    this.rentedAt,
+    this.archivedAt,
+   
+    this.archivedBy,
+    this.isDeleted = false,
   });
 
   factory PropertyModel.fromMap(Map<String, dynamic> map, String id) {
@@ -65,6 +82,14 @@ class PropertyModel {
       updatedAt: map['updatedAt'] != null ? DateTime.parse(map['updatedAt']) : null,
       latitude: map['latitude']?.toDouble(),
       longitude: map['longitude']?.toDouble(),
+      
+      // NEW: Parse archival fields
+      isArchived: map['isArchived'] ?? false,
+      archiveReason: map['archiveReason'],
+      rentedAt: map['rentedAt'] != null ? DateTime.parse(map['rentedAt']) : null,
+      archivedAt: map['archivedAt'] != null ? DateTime.parse(map['archivedAt']) : null,
+      archivedBy: map['archivedBy'],
+      isDeleted: map['isDeleted'] ?? false,
     );
   }
 
@@ -89,15 +114,35 @@ class PropertyModel {
       'updatedAt': updatedAt?.toIso8601String(),
       'latitude': latitude,
       'longitude': longitude,
+      
+      // NEW: Include archival fields
+      'isArchived': isArchived,
+      'archiveReason': archiveReason,
+      'rentedAt': rentedAt?.toIso8601String(),
+      'archivedAt': archivedAt?.toIso8601String(),
+      'archivedBy': archivedBy,
+      'isDeleted': isDeleted,
     };
   }
 
   String get formattedPrice {
     return 'ETB ${price.toStringAsFixed(0)}/month';
   }
+
+  // Helper method to check if property is old (> 3 months)
+  bool get isOldProperty {
+    final threeMonthsAgo = DateTime.now().subtract(const Duration(days: 90));
+    return createdAt.isBefore(threeMonthsAgo);
+  }
+
+  // Check if property is rented/taken
+  bool get isRented => rentedAt != null;
+
+  // Check if property is active (not archived and approved)
+  bool get isActive => !isArchived && status == 'approved';
 }
 
-// Add this extension
+// Keep your existing copyWith extension
 extension PropertyModelCopyWith on PropertyModel {
   PropertyModel copyWith({
     String? id,
@@ -120,6 +165,14 @@ extension PropertyModelCopyWith on PropertyModel {
     DateTime? updatedAt,
     double? latitude,
     double? longitude,
+    
+    // NEW: Archival fields
+    bool? isArchived,
+    String? archiveReason,
+    DateTime? rentedAt,
+    DateTime? archivedAt,
+    String? archivedBy,
+    bool? isDeleted,
   }) {
     return PropertyModel(
       id: id ?? this.id,
@@ -142,6 +195,14 @@ extension PropertyModelCopyWith on PropertyModel {
       updatedAt: updatedAt ?? this.updatedAt,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
+      
+      // NEW: Archival fields
+      isArchived: isArchived ?? this.isArchived,
+      archiveReason: archiveReason ?? this.archiveReason,
+      rentedAt: rentedAt ?? this.rentedAt,
+      archivedAt: archivedAt ?? this.archivedAt,
+      archivedBy: archivedBy ?? this.archivedBy,
+      isDeleted: isDeleted ?? this.isDeleted,
     );
   }
 }

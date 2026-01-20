@@ -348,6 +348,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                                           ),
                                         );
                                       },
+                                       isInitiallyFavorite: false,
                                     );
                                   },
                                 ),

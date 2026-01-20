@@ -230,6 +230,8 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
                               child: PropertyCard(
                                 property: property,
                                 showStatus: true,
+                                showFavorite: false, // Landlords don't need favorite button for their own properties
+                                isInitiallyFavorite: false, // Add this
                                 onTap: () {
                                   Navigator.push(
                                     context,

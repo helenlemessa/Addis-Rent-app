@@ -1,8 +1,9 @@
+import 'package:addis_rent/core/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:addis_rent/presentation/providers/auth_provider.dart';
 import 'package:addis_rent/core/utils/helpers.dart';
-
+import 'package:addis_rent/presentation/screens/landlord/landlord_dashboard.dart';
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
@@ -69,31 +70,42 @@ class AppDrawer extends StatelessWidget {
                 if (user?.role == 'landlord') ...[
                   _buildDrawerItem(
                     context,
+                    icon: Icons.dashboard,
+                    title: 'My Dashboard',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, AppRouter.landlordDashboard);
+                    },
+                  ),
+                  _buildDrawerItem(
+                    context,
                     icon: Icons.apartment,
                     title: 'My Properties',
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to my properties
+                      Navigator.pushNamed(context, AppRouter.myProperties);
                     },
                   ),
                   _buildDrawerItem(
                     context,
-                    icon: Icons.add,
-                    title: 'Add Property',
+                    icon: Icons.add_circle,
+                    title: 'Add New Property',
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to add property
+                      Navigator.pushNamed(context, AppRouter.addProperty);
                     },
                   ),
                 ],
+                
+                // ADMIN SPECIFIC
                 if (user?.role == 'admin') ...[
                   _buildDrawerItem(
                     context,
                     icon: Icons.dashboard,
-                    title: 'Dashboard',
+                    title: 'Admin Dashboard',
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to dashboard
+                      Navigator.pushNamed(context, AppRouter.adminDashboard);
                     },
                   ),
                   _buildDrawerItem(
@@ -102,18 +114,39 @@ class AppDrawer extends StatelessWidget {
                     title: 'Pending Approvals',
                     onTap: () {
                       Navigator.pop(context);
-                      // Navigate to approvals
+                      Navigator.pushNamed(context, AppRouter.approval);
+                    },
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.people,
+                    title: 'Landlord Management',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, AppRouter.adminDashboard);
+                      // You might want to create a specific screen for this
+                    },
+                  ),
+                  _buildDrawerItem(
+                    context,
+                    icon: Icons.clean_hands,
+                    title: 'Cleanup Old Properties',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, AppRouter.propertyCleanup);
                     },
                   ),
                 ],
-                const Divider(),
+               const Divider(),
+                
+                // PROFILE & SETTINGS (Common for all)
                 _buildDrawerItem(
                   context,
                   icon: Icons.person,
-                  title: 'Profile',
+                  title: 'My Profile',
                   onTap: () {
                     Navigator.pop(context);
-                    // Navigate to profile
+                    Navigator.pushNamed(context, AppRouter.profile);
                   },
                 ),
                 _buildDrawerItem(
@@ -122,7 +155,8 @@ class AppDrawer extends StatelessWidget {
                   title: 'Settings',
                   onTap: () {
                     Navigator.pop(context);
-                    // Navigate to settings
+                    // Add settings screen navigation
+                    Helpers.showSnackBar(context, 'Settings coming soon');
                   },
                 ),
                 _buildDrawerItem(
@@ -131,10 +165,14 @@ class AppDrawer extends StatelessWidget {
                   title: 'Help & Support',
                   onTap: () {
                     Navigator.pop(context);
-                    // Navigate to help
+                    // Add help screen navigation
+                    Helpers.showSnackBar(context, 'Help coming soon');
                   },
                 ),
+                
                 const Divider(),
+                
+                // LOGOUT
                 if (authProvider.isLoggedIn)
                   _buildDrawerItem(
                     context,
@@ -144,6 +182,7 @@ class AppDrawer extends StatelessWidget {
                     onTap: () async {
                       Navigator.pop(context);
                       await authProvider.logout();
+                      Navigator.pushReplacementNamed(context, AppRouter.login);
                     },
                   ),
               ],

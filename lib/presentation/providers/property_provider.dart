@@ -78,82 +78,102 @@ class PropertyProvider with ChangeNotifier {
   // ================== REAL-TIME LISTENERS ==================
 
   // For Admin: Listen to ALL properties
-  void listenToAllProperties() {
-    _clearSubscriptions();
-    
-    _allPropertiesSubscription = _firestore
-        .collection('properties')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _handlePropertySnapshot(snapshot, 'total');
-    }, onError: (error) {
-      _error = 'Real-time error: $error';
-      print('❌ Real-time listener error: $error');
-      notifyListeners();
-    });
-  }
+void listenToAllProperties() {
+  _clearSubscriptions();
+  
+  _allPropertiesSubscription = _firestore
+      .collection('properties')
+      .orderBy('createdAt', descending: true)
+      .snapshots()
+      .listen((snapshot) {
+    _handlePropertySnapshot(snapshot, 'total');
+  }, onError: (error) {
+    _error = 'Real-time error: $error';
+    print('❌ Real-time listener error: $error');
+    notifyListeners();
+  });
+}
 
   // For Tenant Browse: Listen to APPROVED properties only
-  void listenToApprovedProperties() {
-    _clearSubscriptions();
+void listenToApprovedProperties() {
+  _clearSubscriptions();
+  
+  print('🎯 Starting listenToApprovedProperties()');
+  
+  // Use SIMPLE query first (no composite filters)
+  _approvedPropertiesSubscription = _firestore
+      .collection('properties')
+      .where('status', isEqualTo: 'approved')
+      .snapshots() // REMOVE orderBy and isArchived filter for now
+      .listen((snapshot) {
     
-    _approvedPropertiesSubscription = _firestore
-        .collection('properties')
-        .where('status', isEqualTo: 'approved')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _handlePropertySnapshot(snapshot, 'approved');
-    }, onError: (error) {
-      _error = 'Real-time error: $error';
-      print('❌ Approved properties listener error: $error');
-      notifyListeners();
-    });
-  }
-
-  // For Landlord: Listen to MY properties
-  void listenToMyProperties(String landlordId) {
-    _clearSubscriptions();
+    print('📥 Received ${snapshot.docs.length} approved properties');
     
-    _myPropertiesSubscription = _firestore
-        .collection('properties')
-        .where('landlordId', isEqualTo: landlordId)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _myProperties = snapshot.docs.map((doc) {
-        return PropertyModel.fromMap(
-          doc.data()! as Map<String, dynamic>,
-          doc.id,
-        );
-      }).toList();
-      
-      notifyListeners();
-    }, onError: (error) {
-      _error = 'Real-time error: $error';
-      print('❌ My properties listener error: $error');
-      notifyListeners();
-    });
-  }
-
-  // For Admin Approval Screen: Listen to PENDING properties
-  void listenToPendingProperties() {
-    _clearSubscriptions();
+    // Process in memory
+    final allProperties = snapshot.docs.map((doc) {
+      return PropertyModel.fromMap(
+        doc.data()! as Map<String, dynamic>,
+        doc.id,
+      );
+    }).toList();
     
-    _allPropertiesSubscription = _firestore
-        .collection('properties')
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .listen((snapshot) {
-      _handlePropertySnapshot(snapshot, 'pending');
-    }, onError: (error) {
-      _error = 'Real-time error: $error';
-      print('❌ Pending properties listener error: $error');
-      notifyListeners();
-    });
-  }
+    // 1. Filter out archived properties
+    final nonArchived = allProperties.where((p) => !p.isArchived).toList();
+    print('✅ Non-archived properties: ${nonArchived.length}');
+    
+    // 2. Sort by date manually
+    nonArchived.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    _properties = nonArchived;
+    _filterProperties();
+    
+    print('🎯 Final properties: ${_properties.length}');
+    print('🎯 Filtered properties: ${_filteredProperties.length}');
+    
+    notifyListeners();
+    
+  }, onError: (error) {
+    print('🔥 listenToApprovedProperties error: $error');
+    _error = 'Error: $error';
+    notifyListeners();
+  });
+}
+void listenToMyProperties(String landlordId) {
+  _clearSubscriptions();
+  
+  print('👤 Starting listenToMyProperties() for landlord: $landlordId');
+  
+  // Use SIMPLE query
+  _myPropertiesSubscription = _firestore
+      .collection('properties')
+      .where('landlordId', isEqualTo: landlordId)
+      .snapshots() // REMOVE orderBy and isArchived filter
+      .listen((snapshot) {
+    
+    print('📥 Received ${snapshot.docs.length} properties for landlord');
+    
+    final allProperties = snapshot.docs.map((doc) {
+      return PropertyModel.fromMap(
+        doc.data()! as Map<String, dynamic>,
+        doc.id,
+      );
+    }).toList();
+    
+    // Filter and sort in memory
+    final nonArchived = allProperties.where((p) => !p.isArchived).toList();
+    nonArchived.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    _myProperties = nonArchived;
+    
+    print('✅ Landlord active properties: ${_myProperties.length}');
+    
+    notifyListeners();
+  }, onError: (error) {
+    print('🔥 listenToMyProperties error: $error');
+    _error = 'Error: $error';
+    notifyListeners();
+  });
+}
 
   void _handlePropertySnapshot(QuerySnapshot snapshot, String type) {
     _properties = snapshot.docs.map((doc) {
@@ -326,18 +346,20 @@ class PropertyProvider with ChangeNotifier {
     print('   Results: ${_filteredProperties.length}');
   }
 
-  void _filterProperties() {
-    if (_searchQuery.isEmpty &&
-        _selectedLocation == null &&
-        _selectedType == null &&
-        _minPrice == null &&
-        _maxPrice == null &&
-        _selectedBedrooms == null) {
-      _filteredProperties = List.from(_properties);
-      return;
-    }
+ void _filterProperties() {
+  if (_searchQuery.isEmpty &&
+      _selectedLocation == null &&
+      _selectedType == null &&
+      _minPrice == null &&
+      _maxPrice == null &&
+      _selectedBedrooms == null) {
+    // Filter out archived properties
+    _filteredProperties = _properties.where((p) => !p.isArchived).toList();
+    return;
+  }
 
     _filteredProperties = _properties.where((property) {
+       if (property.isArchived) return false;
       // Search query filter
       if (_searchQuery.isNotEmpty) {
         final matchesQuery =
@@ -377,7 +399,21 @@ class PropertyProvider with ChangeNotifier {
       return true;
     }).toList();
   }
-
+void listenToPendingProperties() {
+  _clearSubscriptions();
+  
+  _allPropertiesSubscription = _firestore
+      .collection('properties')
+      .where('status', isEqualTo: 'pending')
+      .snapshots() // REMOVE orderBy
+      .listen((snapshot) {
+    _handlePropertySnapshot(snapshot, 'pending');
+  }, onError: (error) {
+    _error = 'Real-time error: $error';
+    print('❌ Pending properties listener error: $error');
+    notifyListeners();
+  });
+}
   void clearFilters() {
     _searchQuery = '';
     _selectedLocation = null;

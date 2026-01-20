@@ -1,3 +1,4 @@
+import 'package:addis_rent/data/models/property_model.dart';
 import 'package:addis_rent/presentation/screens/home/property_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +6,7 @@ import 'package:addis_rent/presentation/providers/property_provider.dart';
 import 'package:addis_rent/presentation/providers/user_provider.dart';
 import 'package:addis_rent/presentation/screens/admin/approval_screen.dart';
 import 'package:addis_rent/presentation/screens/admin/landlord_management_screen.dart';
+import 'package:addis_rent/presentation/screens/admin/property_cleanup_screen.dart'; // ADD THIS IMPORT
 import 'package:addis_rent/presentation/widgets/empty_state.dart';
 import 'package:addis_rent/core/utils/helpers.dart';
 
@@ -17,6 +19,7 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   final int _selectedTab = 0;
+  int _oldPropertiesCount = 0; // ADD THIS
 
   @override
   void initState() {
@@ -33,6 +36,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
     propertyProvider.listenToAllProperties(); // Admin sees everything
     userProvider.loadUsers();
     userProvider.loadLandlords();
+    
+    // ADD THIS: Calculate old properties count
+    _calculateOldPropertiesCount(propertyProvider.properties);
+  }
+
+  // ADD THIS METHOD: Calculate old properties (> 3 months)
+  void _calculateOldPropertiesCount(List<PropertyModel> properties) {
+    final threeMonthsAgo = DateTime.now().subtract(const Duration(days: 90));
+    final oldProperties = properties.where((property) {
+      return property.status == 'approved' && 
+             !property!.isArchived &&
+             property!.createdAt.isBefore(threeMonthsAgo);
+    }).toList();
+    
+    setState(() {
+      _oldPropertiesCount = oldProperties.length;
+    });
   }
 
   Widget _buildStatsCard({
@@ -337,10 +357,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // We need to import PropertyDetailScreen
-  // Add this import at the top of your file
-  // import 'package:addis_rent/presentation/screens/home/property_detail_screen.dart';
-
   @override
   Widget build(BuildContext context) {
     final propertyProvider = Provider.of<PropertyProvider>(context);
@@ -400,7 +416,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  // Quick Stats
+                  // Quick Stats - UPDATED GRID
                   GridView.count(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -454,6 +470,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         value: propertyProvider.properties.length.toString(),
                         onTap: () {
                           _showAllProperties(context);
+                        },
+                      ),
+                      // ADD THIS NEW STATS CARD FOR OLD PROPERTIES
+                      _buildStatsCard(
+                        icon: Icons.clean_hands,
+                        color: Colors.deepOrange,
+                        title: 'Old Properties',
+                        value: _oldPropertiesCount.toString(),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const PropertyCleanupScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      // Optional: Add an empty card or another stat
+                      _buildStatsCard(
+                        icon: Icons.analytics,
+                        color: Colors.teal,
+                        title: 'System Health',
+                        value: 'Good',
+                        onTap: () {
+                          // You can add system health/analytics screen later
+                          Helpers.showSnackBar(context, 'System is healthy');
                         },
                       ),
                     ],
@@ -619,13 +661,3 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 }
-
-// You need to create a UserManagementScreen similar to LandlordManagementScreen
-// Here's a basic version you can create in a new file
-
-
- 
-
-// Also, you need to make sure PropertyDetailScreen is imported
-// Add this import at the top of the file:
-// import 'package:addis_rent/presentation/screens/home/property_detail_screen.dart';

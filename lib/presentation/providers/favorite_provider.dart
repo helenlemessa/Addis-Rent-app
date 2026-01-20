@@ -1,22 +1,21 @@
 import 'package:flutter/foundation.dart';
 import 'package:addis_rent/data/models/property_model.dart';
+import 'package:addis_rent/data/repositories/favorite_repository.dart';
 
 class FavoriteProvider with ChangeNotifier {
+  final FavoriteRepository _repository = FavoriteRepository();
+  
   List<PropertyModel> _favoriteProperties = [];
   Set<String> _favoriteIds = {};
   bool _isLoading = false;
   String? _error;
   String? _currentUserId;
+  bool _isDisposed = false; // Add this flag
   
   List<PropertyModel> get favoriteProperties => _favoriteProperties;
   Set<String> get favoriteIds => _favoriteIds;
   bool get isLoading => _isLoading;
   String? get error => _error;
-
-  // Mock favorites for demo
-  final Map<String, List<String>> _mockUserFavorites = {
-    'demo-user-123': ['1', '2'], // Demo user favorites property 1 and 2
-  };
 
   // Initialize with current user
   void initializeForUser(String userId) {
@@ -24,14 +23,8 @@ class FavoriteProvider with ChangeNotifier {
       _currentUserId = userId;
       _favoriteIds.clear();
       _favoriteProperties.clear();
-      _loadCachedFavorites(userId);
+      _notifyListenersSafely(); // Use safe method
     }
-  }
-
-  void _loadCachedFavorites(String userId) {
-    final cachedFavorites = _mockUserFavorites[userId] ?? [];
-    _favoriteIds = Set<String>.from(cachedFavorites);
-    notifyListeners();
   }
 
   Future<void> loadFavorites(String userId) async {
@@ -40,28 +33,41 @@ class FavoriteProvider with ChangeNotifier {
     }
     
     _isLoading = true;
-    notifyListeners();
+    _notifyListenersSafely();
     
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      // Get favorite IDs for this user
-      final favoriteIds = _mockUserFavorites[userId] ?? [];
-      
-      // Update the IDs set
-      _favoriteIds = Set<String>.from(favoriteIds);
-      
-      // Clear properties list (in real app, you'd fetch them)
+      final favorites = await _repository.getFavorites(userId);
+      _favoriteIds = Set<String>.from(favorites.map((f) => f.propertyId));
       _favoriteProperties = [];
-      
       _error = null;
-      print('✅ Loaded ${_favoriteIds.length} favorites for user $userId');
+      print('✅ Loaded ${_favoriteIds.length} favorites for user $userId from Firestore');
     } catch (e) {
       _error = e.toString();
-      print('❌ Error loading favorites: $e');
+      print('❌ Error loading favorites from Firestore: $e');
     } finally {
       _isLoading = false;
-      notifyListeners();
+      _notifyListenersSafely();
+    }
+  }
+
+  // Load favorite properties with details
+  Future<void> loadFavoriteProperties(String userId) async {
+    if (_isLoading) return;
+    
+    _isLoading = true;
+    _notifyListenersSafely();
+    
+    try {
+      _favoriteProperties = await _repository.getFavoriteProperties(userId);
+      _favoriteIds = Set<String>.from(_favoriteProperties.map((p) => p.id));
+      _error = null;
+      print('✅ Loaded ${_favoriteProperties.length} favorite properties for user $userId');
+    } catch (e) {
+      _error = e.toString();
+      print('❌ Error loading favorite properties: $e');
+    } finally {
+      _isLoading = false;
+      _notifyListenersSafely();
     }
   }
 
@@ -77,27 +83,26 @@ class FavoriteProvider with ChangeNotifier {
     final wasFavorite = _favoriteIds.contains(propertyId);
     if (wasFavorite) {
       _favoriteIds.remove(propertyId);
+      _favoriteProperties.removeWhere((p) => p.id == propertyId);
     } else {
       _favoriteIds.add(propertyId);
     }
-    notifyListeners();
+    _notifyListenersSafely();
     
     try {
-      await Future.delayed(const Duration(milliseconds: 300));
-      
       if (wasFavorite) {
-        // Remove from mock storage
-        _mockUserFavorites[userId]?.remove(propertyId);
-        print('✅ Removed property $propertyId from favorites');
+        await _repository.removeFavorite(
+          userId: userId,
+          propertyId: propertyId,
+        );
+        print('✅ Removed property $propertyId from favorites in Firestore');
       } else {
-        // Add to mock storage
-        if (!_mockUserFavorites.containsKey(userId)) {
-          _mockUserFavorites[userId] = [];
-        }
-        _mockUserFavorites[userId]!.add(propertyId);
-        print('✅ Added property $propertyId to favorites');
+        await _repository.addFavorite(
+          userId: userId,
+          propertyId: propertyId,
+        );
+        print('✅ Added property $propertyId to favorites in Firestore');
       }
-      
       _error = null;
     } catch (e) {
       // Revert UI change on error
@@ -106,9 +111,10 @@ class FavoriteProvider with ChangeNotifier {
       } else {
         _favoriteIds.remove(propertyId);
       }
-      notifyListeners();
+      _notifyListenersSafely();
       
       _error = e.toString();
+      print('❌ Error toggling favorite in Firestore: $e');
       rethrow;
     }
   }
@@ -118,10 +124,10 @@ class FavoriteProvider with ChangeNotifier {
     required String propertyId,
   }) async {
     try {
-      await Future.delayed(const Duration(milliseconds: 100));
-      
-      // Check mock storage
-      final isFavorite = _mockUserFavorites[userId]?.contains(propertyId) ?? false;
+      final isFavorite = await _repository.isFavorite(
+        userId: userId,
+        propertyId: propertyId,
+      );
       
       if (_currentUserId != userId) {
         initializeForUser(userId);
@@ -133,9 +139,10 @@ class FavoriteProvider with ChangeNotifier {
         _favoriteIds.remove(propertyId);
       }
       
-      notifyListeners();
+      _notifyListenersSafely();
     } catch (e) {
       _error = e.toString();
+      print('❌ Error checking favorite in Firestore: $e');
     }
   }
 
@@ -148,21 +155,27 @@ class FavoriteProvider with ChangeNotifier {
     }
     
     _isLoading = true;
-    notifyListeners();
+    _notifyListenersSafely();
     
     try {
-      await Future.delayed(const Duration(milliseconds: 300));
+      await _repository.removeFavorite(
+        userId: userId,
+        propertyId: propertyId,
+      );
       
       _favoriteIds.remove(propertyId);
-      _mockUserFavorites[userId]?.remove(propertyId);
+      _favoriteProperties.removeWhere((p) => p.id == propertyId);
       
       _error = null;
-      notifyListeners();
+      print('✅ Removed property $propertyId from favorites in Firestore');
+      _notifyListenersSafely();
     } catch (e) {
       _error = e.toString();
+      print('❌ Error removing favorite from Firestore: $e');
       rethrow;
     } finally {
       _isLoading = false;
+      _notifyListenersSafely();
     }
   }
 
@@ -172,23 +185,23 @@ class FavoriteProvider with ChangeNotifier {
     }
     
     _isLoading = true;
-    notifyListeners();
+    _notifyListenersSafely();
     
     try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
+      await _repository.removeAllFavorites(userId);
       _favoriteProperties.clear();
       _favoriteIds.clear();
-      _mockUserFavorites[userId]?.clear();
       
       _error = null;
-      print('✅ Cleared all favorites for user $userId');
-      notifyListeners();
+      print('✅ Cleared all favorites for user $userId from Firestore');
+      _notifyListenersSafely();
     } catch (e) {
       _error = e.toString();
+      print('❌ Error clearing favorites from Firestore: $e');
       rethrow;
     } finally {
       _isLoading = false;
+      _notifyListenersSafely();
     }
   }
 
@@ -198,12 +211,24 @@ class FavoriteProvider with ChangeNotifier {
 
   void clearError() {
     _error = null;
-    notifyListeners();
+    _notifyListenersSafely();
   }
 
-  // Get properties from the list of favorite IDs
   void setFavoriteProperties(List<PropertyModel> properties) {
     _favoriteProperties = properties;
-    notifyListeners();
+    _notifyListenersSafely();
+  }
+
+  // SAFE method to notify listeners (checks if disposed)
+  void _notifyListenersSafely() {
+    if (!_isDisposed && hasListeners) {
+      notifyListeners();
+    }
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

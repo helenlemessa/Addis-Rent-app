@@ -7,50 +7,34 @@ class PropertyRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
 
-  Future<List<PropertyModel>> getProperties({
-    String? status,
-    String? landlordId,
-    int limit = 20,
-  }) async {
-    try {
-      Query query = _firestore
-          .collection(AppConstants.propertiesCollection)
-          .orderBy('createdAt', descending: true)
-          .limit(limit);
+ Future<List<PropertyModel>> getProperties({
+  String? status,
+  String? landlordId,
+  int limit = 20,
+}) async {
+  try {
+    Query query = _firestore
+        .collection(AppConstants.propertiesCollection)
+        .where('isArchived', isEqualTo: false) // ADD THIS FILTER
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
 
-      if (status != null) {
-        query = query.where('status', isEqualTo: status);
-      }
-      
-      if (landlordId != null) {
-        query = query.where('landlordId', isEqualTo: landlordId);
-      }
-
-      final snapshot = await query.get();
-      return snapshot.docs
-          .map((doc) => PropertyModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
-          .toList();
-    } catch (e) {
-      rethrow;
+    if (status != null) {
+      query = query.where('status', isEqualTo: status);
     }
-  }
-
-  Future<PropertyModel> getProperty(String propertyId) async {
-    try {
-      final doc = await _firestore
-          .collection(AppConstants.propertiesCollection)
-          .doc(propertyId)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('Property not found');
-      }
-      
-      return PropertyModel.fromMap(doc.data()!, doc.id);
-    } catch (e) {
-      rethrow;
+    
+    if (landlordId != null) {
+      query = query.where('landlordId', isEqualTo: landlordId);
     }
+
+    final snapshot = await query.get();
+    return snapshot.docs
+        .map((doc) => PropertyModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  } catch (e) {
+    rethrow;
   }
+}
 
   Future<String> createProperty(PropertyModel property) async {
     try {
@@ -127,7 +111,38 @@ class PropertyRepository {
       rethrow;
     }
   }
+// In your existing PropertyRepository, add these methods:
 
+Future<List<PropertyModel>> getActiveProperties({
+  String? status,
+  String? landlordId,
+  int limit = 20,
+}) async {
+  try {
+    Query query = _firestore
+        .collection(AppConstants.propertiesCollection)
+        .where('isArchived', isEqualTo: false)
+        .orderBy('createdAt', descending: true)
+        .limit(limit);
+
+    if (status != null) {
+      query = query.where('status', isEqualTo: status);
+    }
+    
+    if (landlordId != null) {
+      query = query.where('landlordId', isEqualTo: landlordId);
+    }
+
+    final snapshot = await query.get();
+    return snapshot.docs
+        .map((doc) => PropertyModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+        .toList();
+  } catch (e) {
+    rethrow;
+  }
+}
+
+ 
   Future<List<PropertyModel>> searchProperties({
     String? query,
     String? location,

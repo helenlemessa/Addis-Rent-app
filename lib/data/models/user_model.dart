@@ -1,4 +1,6 @@
 // lib/data/models/user_model.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class UserModel {
   final String id;
   final String fullName;
@@ -30,29 +32,57 @@ class UserModel {
     this.updatedAt,
   });
 
-  factory UserModel.fromMap(Map<String, dynamic> map, String id) {
-    return UserModel(
-      id: id,
-      fullName: map['fullName'] ?? '',
-      email: map['email'] ?? '',
-      phone: map['phone'] ?? '',
-      role: map['role'] ?? 'tenant',
-      profileImage: map['profileImage'],
-      isVerified: map['isVerified'] ?? false,
-      isSuspended: map['isSuspended'] ?? false,
-      suspensionReason: map['suspensionReason'],
-      suspendedAt: map['suspendedAt'] != null
-          ? DateTime.parse(map['suspendedAt'])
-          : null,
-      verifiedAt: map['verifiedAt'] != null
-          ? DateTime.parse(map['verifiedAt'])
-          : null,
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: map['updatedAt'] != null
-          ? DateTime.parse(map['updatedAt'])
-          : null,
-    );
+factory UserModel.fromMap(Map<String, dynamic> map, String id) {
+  // Helper function to safely parse dates
+  DateTime? _parseDate(dynamic dateValue) {
+    if (dateValue == null) return null;
+    try {
+      if (dateValue is DateTime) {
+        return dateValue;
+      } else if (dateValue is Timestamp) {
+        return dateValue.toDate();
+      } else if (dateValue is String) {
+        return DateTime.parse(dateValue);
+      } else if (dateValue is int) {
+        return DateTime.fromMillisecondsSinceEpoch(dateValue);
+      }
+    } catch (e) {
+      print('⚠️ Error parsing date: $dateValue - $e');
+    }
+    return null;
   }
+
+  // Get or create createdAt - REQUIRED field
+  DateTime createdAt;
+  try {
+    final createdAtValue = map['createdAt'];
+    if (createdAtValue == null) {
+      print('⚠️ User $id missing createdAt, using current date');
+      createdAt = DateTime.now();
+    } else {
+      createdAt = _parseDate(createdAtValue) ?? DateTime.now();
+    }
+  } catch (e) {
+    print('⚠️ Error with createdAt for user $id: $e');
+    createdAt = DateTime.now();
+  }
+
+  return UserModel(
+    id: id,
+    fullName: map['fullName']?.toString().trim() ?? 'Unknown User',
+    email: (map['email'] ?? '').toString().toLowerCase().trim(),
+    phone: map['phone']?.toString().trim() ?? '',
+    role: map['role']?.toString().toLowerCase() ?? 'tenant',
+    profileImage: map['profileImage']?.toString(),
+    isVerified: map['isVerified'] == true,
+    isSuspended: map['isSuspended'] == true,
+    suspensionReason: map['suspensionReason']?.toString(),
+    suspendedAt: _parseDate(map['suspendedAt']),
+    verifiedAt: _parseDate(map['verifiedAt']),
+    createdAt: createdAt,
+    updatedAt: _parseDate(map['updatedAt']),
+  );
+}
 
   Map<String, dynamic> toMap() {
     return {

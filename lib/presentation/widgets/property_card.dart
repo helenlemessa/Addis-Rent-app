@@ -1,17 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:addis_rent/data/models/property_model.dart';
 import 'package:addis_rent/core/utils/helpers.dart';
 import 'package:addis_rent/presentation/providers/favorite_provider.dart';
 import 'package:addis_rent/presentation/providers/auth_provider.dart';
 
-class PropertyCard extends StatelessWidget {
+class PropertyCard extends StatefulWidget {
   final PropertyModel property;
   final VoidCallback? onTap;
   final bool showStatus;
   final bool showFavorite;
   final Widget? actionButtons;
+  final bool isInitiallyFavorite;
+  final bool showLandlordActions;
+  final VoidCallback? onMarkAsRented;
+  final VoidCallback? onDeleteProperty;
 
   const PropertyCard({
     super.key,
@@ -20,30 +23,23 @@ class PropertyCard extends StatelessWidget {
     this.showStatus = false,
     this.showFavorite = true,
     this.actionButtons,
+    this.isInitiallyFavorite = false,
+    this.showLandlordActions = false,
+    this.onMarkAsRented,
+    this.onDeleteProperty,
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Initialize favorite provider for current user when card is built
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = context.read<AuthProvider>();
-      final favoriteProvider = context.read<FavoriteProvider>();
-      
-      if (authProvider.isLoggedIn && showFavorite) {
-        final user = authProvider.currentUser!;
-        favoriteProvider.initializeForUser(user.id);
-        // Check if this property is favorite
-        favoriteProvider.checkIfFavorite(
-          userId: user.id,
-          propertyId: property.id,
-        );
-      }
-    });
+  State<PropertyCard> createState() => _PropertyCardState();
+}
 
+class _PropertyCardState extends State<PropertyCard> {
+  @override
+  Widget build(BuildContext context) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,12 +52,12 @@ class PropertyCard extends StatelessWidget {
                     topLeft: Radius.circular(16),
                     topRight: Radius.circular(16),
                   ),
-                  child: property.images.isNotEmpty
+                  child: widget.property.images.isNotEmpty
                       ? SizedBox(
                           width: double.infinity,
                           height: 180,
                           child: Helpers.buildPropertyImage(
-                            property.images.first,
+                            widget.property.images.first,
                             width: double.infinity,
                             height: 180,
                           ),
@@ -78,7 +74,7 @@ class PropertyCard extends StatelessWidget {
                         ),
                 ),
                 // Status Badge
-                if (showStatus && property.status != 'approved')
+                if (widget.showStatus && widget.property.status != 'approved')
                   Positioned(
                     top: 12,
                     left: 12,
@@ -88,11 +84,11 @@ class PropertyCard extends StatelessWidget {
                         vertical: 6,
                       ),
                       decoration: BoxDecoration(
-                        color: Helpers.getStatusColor(property.status),
+                        color: Helpers.getStatusColor(widget.property.status),
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        property.status.toUpperCase(),
+                        widget.property.status.toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -103,7 +99,7 @@ class PropertyCard extends StatelessWidget {
                     ),
                   ),
                 // Favorite Button
-                if (showFavorite)
+                if (widget.showFavorite)
                   Positioned(
                     top: 12,
                     right: 12,
@@ -112,11 +108,13 @@ class PropertyCard extends StatelessWidget {
                         if (!authProvider.isLoggedIn) {
                           return GestureDetector(
                             onTap: () {
-                              Helpers.showSnackBar(
-                                context,
-                                'Please login to save favorites',
-                                isError: true,
-                              );
+                              if (mounted) {
+                                Helpers.showSnackBar(
+                                  context,
+                                  'Please login to save favorites',
+                                  isError: true,
+                                );
+                              }
                             },
                             child: Container(
                               padding: const EdgeInsets.all(6),
@@ -142,32 +140,42 @@ class PropertyCard extends StatelessWidget {
                         
                         return Consumer<FavoriteProvider>(
                           builder: (context, favoriteProvider, child) {
-                            final isFavorite = favoriteProvider.isPropertyFavorite(property.id);
+                            final isFavorite = favoriteProvider.isPropertyFavorite(widget.property.id);
                             
                             return GestureDetector(
                               onTap: () async {
                                 final user = authProvider.currentUser!;
                                 
                                 try {
-                                  print('❤️ Toggling favorite for property: ${property.id}');
+                                  print('❤️ Toggling favorite for property: ${widget.property.id}');
+                                  
+                                  // Check if widget is still mounted
+                                  if (!mounted) return;
+                                  
                                   await favoriteProvider.toggleFavorite(
                                     userId: user.id,
-                                    propertyId: property.id,
+                                    propertyId: widget.property.id,
                                   );
-                                  print('✅ Favorite toggled. Is now favorite: $isFavorite');
                                   
-                                  // Show feedback
-                                  Helpers.showSnackBar(
-                                    context,
-                                    isFavorite ? 'Added to favorites' : 'Removed from favorites',
-                                  );
+                                  print('✅ Favorite toggled. Is now favorite: ${favoriteProvider.isPropertyFavorite(widget.property.id)}');
+                                  
+                                  // Show feedback only if still mounted
+                                  if (mounted) {
+                                    final currentIsFavorite = favoriteProvider.isPropertyFavorite(widget.property.id);
+                                    Helpers.showSnackBar(
+                                      context,
+                                      currentIsFavorite ? 'Added to favorites' : 'Removed from favorites',
+                                    );
+                                  }
                                 } catch (e) {
                                   print('❌ Error toggling favorite: $e');
-                                  Helpers.showSnackBar(
-                                    context,
-                                    'Failed to update favorite',
-                                    isError: true,
-                                  );
+                                  if (mounted) {
+                                    Helpers.showSnackBar(
+                                      context,
+                                      'Failed to update favorite',
+                                      isError: true,
+                                    );
+                                  }
                                 }
                               },
                               child: AnimatedContainer(
@@ -196,6 +204,58 @@ class PropertyCard extends StatelessWidget {
                       },
                     ),
                   ),
+                // Landlord Actions Button
+                if (widget.showLandlordActions)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_vert, size: 20, color: Colors.grey),
+                        onSelected: (value) {
+                          if (value == 'rented' && widget.onMarkAsRented != null) {
+                            widget.onMarkAsRented!();
+                          } else if (value == 'delete' && widget.onDeleteProperty != null) {
+                            widget.onDeleteProperty!();
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'rented',
+                            child: Row(
+                              children: [
+                                Icon(Icons.done_all, size: 18, color: Colors.green),
+                                SizedBox(width: 8),
+                                Text('Mark as Rented'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                SizedBox(width: 8),
+                                Text('Delete Property'),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 // Price Tag
                 Positioned(
                   bottom: 12,
@@ -210,7 +270,7 @@ class PropertyCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      property.formattedPrice,
+                      widget.property.formattedPrice,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 12,
@@ -229,7 +289,7 @@ class PropertyCard extends StatelessWidget {
                 children: [
                   // Title
                   Text(
-                    property.title,
+                    widget.property.title,
                     style: Theme.of(context).textTheme.titleLarge,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -246,7 +306,7 @@ class PropertyCard extends StatelessWidget {
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          property.location,
+                          widget.property.location,
                           style: TextStyle(
                             color: Colors.grey.shade600,
                             fontSize: 14,
@@ -263,7 +323,7 @@ class PropertyCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        property.propertyType,
+                        widget.property.propertyType,
                         style: TextStyle(
                           color: Colors.grey.shade600,
                           fontSize: 14,
@@ -277,16 +337,16 @@ class PropertyCard extends StatelessWidget {
                     children: [
                       _buildFeatureItem(
                         icon: Icons.bed,
-                        text: '${property.bedrooms} bed',
+                        text: '${widget.property.bedrooms} bed',
                       ),
                       const SizedBox(width: 16),
                       _buildFeatureItem(
                         icon: Icons.bathtub,
-                        text: '${property.bathrooms} bath',
+                        text: '${widget.property.bathrooms} bath',
                       ),
                       const Spacer(),
                       // Amenities Count
-                      if (property.amenities.isNotEmpty)
+                      if (widget.property.amenities.isNotEmpty)
                         Row(
                           children: [
                             Icon(
@@ -296,7 +356,7 @@ class PropertyCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${property.amenities.length} amenities',
+                              '${widget.property.amenities.length} amenities',
                               style: TextStyle(
                                 color: Colors.green.shade600,
                                 fontSize: 12,
@@ -307,48 +367,48 @@ class PropertyCard extends StatelessWidget {
                         ),
                     ],
                   ),
-                  // Action Buttons (for admin approval screen, etc.)
-                  if (actionButtons != null)
+                  // Action Buttons
+                  if (widget.actionButtons != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
-                        children: [actionButtons!],
+                        children: [widget.actionButtons!],
                       ),
                     ),
                   // Status Info
-                  if (showStatus && property.status != 'approved')
+                  if (widget.showStatus && widget.property.status != 'approved')
                     Container(
                       margin: const EdgeInsets.only(top: 12),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Helpers.getStatusColor(property.status)
+                        color: Helpers.getStatusColor(widget.property.status)
                             .withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: Helpers.getStatusColor(property.status)
+                          color: Helpers.getStatusColor(widget.property.status)
                               .withOpacity(0.3),
                         ),
                       ),
                       child: Row(
                         children: [
                           Icon(
-                            property.status == 'pending'
+                            widget.property.status == 'pending'
                                 ? Icons.access_time
                                 : Icons.info,
                             size: 16,
-                            color: Helpers.getStatusColor(property.status),
+                            color: Helpers.getStatusColor(widget.property.status),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              property.status == 'pending'
+                              widget.property.status == 'pending'
                                   ? 'Under review - will be visible after approval'
-                                  : property.rejectionReason ??
+                                  : widget.property.rejectionReason ??
                                       'Property was rejected',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: Helpers.getStatusColor(property.status),
+                                color: Helpers.getStatusColor(widget.property.status),
                               ),
                               maxLines: 2,
                             ),

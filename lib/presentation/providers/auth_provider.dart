@@ -33,6 +33,12 @@ class AuthProvider with ChangeNotifier {
         _currentUser = user;
         _isLoggedIn = true;
         print('✅ User already logged in: ${user.fullName} (${user.role})');
+      if (user.role == 'tenant') {
+        // We can't access FavoriteProvider directly here, 
+        // so we'll set a flag that FavoritesScreen can use
+        print('📋 Tenant user - favorites should be loaded in FavoritesScreen');
+      }
+    
       } else {
         _currentUser = null;
         _isLoggedIn = false;
@@ -71,6 +77,9 @@ class AuthProvider with ChangeNotifier {
       _error = null;
 
       print('✅ Email login successful: ${user.fullName} (${user.role})');
+      if (user.role == 'tenant') {
+      print('💡 Tenant logged in - FavoritesScreen should load favorites');
+    }
     } catch (e) {
       _error = 'Login failed: ${e.toString()}';
       print('❌ Login error: $_error');
@@ -207,12 +216,58 @@ class AuthProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
   }
-  
+  // In lib/presentation/providers/auth_provider.dart, add these methods:
+
+Future<void> sendPasswordResetEmail(String email) async {
+  _isLoading = true;
+  _error = null;
+  notifyListeners();
+
+  try {
+    await _authRepository.sendPasswordResetEmail(email);
+    _error = null;
+    print('✅ Password reset email sent successfully');
+  } catch (e) {
+    _error = 'Failed to send reset email: ${e.toString()}';
+    print('❌ Password reset error: $_error');
+    rethrow;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
+
+Future<void> confirmPasswordReset({
+  required String code,
+  required String newPassword,
+}) async {
+  _isLoading = true;
+  _error = null;
+  notifyListeners();
+
+  try {
+    await _authRepository.confirmPasswordReset(
+      code: code,
+      newPassword: newPassword,
+    );
+    _error = null;
+    print('✅ Password reset confirmed successfully');
+  } catch (e) {
+    _error = 'Failed to reset password: ${e.toString()}';
+    print('❌ Password reset confirmation error: $_error');
+    rethrow;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
+  }
+}
   Future<void> _clearLocalStorage() async {
     // You can add any local storage clearing logic here
     // For example: SharedPreferences, Hive, etc.
     print('🔄 Clearing local storage...');
   }
+
+   
 
   // Remove the setter since it's not needed
   // set _isAuthenticated(bool _isAuthenticated) {}

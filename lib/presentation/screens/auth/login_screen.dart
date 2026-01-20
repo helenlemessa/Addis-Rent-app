@@ -28,8 +28,8 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     // Pre-fill demo credentials for testing
-    _emailController.text = 'tenant@demo.com';
-    _passwordController.text = 'password123';
+    _emailController.text = '';
+    _passwordController.text = '';
   }
 
   @override
@@ -55,8 +55,16 @@ class _LoginScreenState extends State<LoginScreen> {
         await _loadUserData(authProvider.currentUser!);
         
         // Navigate to home
-        Navigator.pushReplacementNamed(context, AppRouter.home);
-      }
+       final user = authProvider.currentUser!;
+  if (user.role == 'landlord') {
+    // Optional: Go to landlord home or dashboard
+    Navigator.pushReplacementNamed(context, AppRouter.landlordDashboard);
+  } else if (user.role == 'admin') {
+    Navigator.pushReplacementNamed(context, AppRouter.adminDashboard);
+  } else {
+    Navigator.pushReplacementNamed(context, AppRouter.home);
+  }
+}
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -98,10 +106,15 @@ class _LoginScreenState extends State<LoginScreen> {
     propertyProvider.loadProperties(status: 'approved');
     
     // Load favorites if tenant
-    if (user.role == 'tenant') {
-      await favoriteProvider.loadFavorites(user.id);
-    }
+     if (user.role == 'tenant') {
+    propertyProvider.loadProperties(status: 'approved');
+    await favoriteProvider.loadFavorites(user.id);
+  } else if (user.role == 'landlord') {
+    propertyProvider.listenToMyProperties(user.id);
+  } else if (user.role == 'admin') {
+    propertyProvider.listenToAllProperties();
   }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -130,65 +143,33 @@ class _LoginScreenState extends State<LoginScreen> {
               
               // Google Sign-In Button
               if (!authProvider.isLoading)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _loginWithGoogle,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: Colors.grey.shade300),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'G',
-                            style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Text('Continue with Google'),
-                      ],
-                    ),
-                  ),
-                ),
-              
-              const SizedBox(height: 24),
-              
-              // Divider with "OR"
-              Row(
-                children: [
-                  Expanded(
-                    child: Divider(color: Colors.grey.shade300),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'OR',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                  ),
-                  Expanded(
-                    child: Divider(color: Colors.grey.shade300),
-                  ),
-                ],
-              ),
-              
+  SizedBox(
+    width: double.infinity,
+    child: ElevatedButton(
+      onPressed: _loginWithGoogle,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.grey.shade300),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Image.asset(
+            'assets/images/Google.webp', // Add Google icon to your assets
+            height: 24,
+            width: 24,
+          ),
+          const SizedBox(width: 12),
+          const Text('Continue with Google'),
+        ],
+      ),
+    ),
+  ),
               const SizedBox(height: 24),
               
               // Email/Password Form
@@ -225,18 +206,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     
                     // Forgot Password
                     Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Forgot password feature coming soon'),
-                            ),
-                          );
-                        },
-                        child: const Text('Forgot Password?'),
-                      ),
-                    ),
+  alignment: Alignment.centerRight,
+  child: TextButton(
+    onPressed: () {
+      Navigator.pushNamed(context, AppRouter.forgotPassword);
+    },
+    child: const Text('Forgot Password?'),
+  ),
+),
                     
                     const SizedBox(height: 24),
                     

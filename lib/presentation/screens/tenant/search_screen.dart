@@ -162,7 +162,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                       ),
                                     ),
                                   );
-                                },
+                                }, isInitiallyFavorite: false,
                               );
                             },
                           ),

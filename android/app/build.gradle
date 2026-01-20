@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.addisrent"
-    compileSdk = 36
+    compileSdk = 36  // CHANGED: from 34 to 36
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -21,7 +21,7 @@ android {
     defaultConfig {
         applicationId = "com.example.addisrent"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 36  // CHANGED: from 34 to 36 (can keep 34 but better to update)
         versionCode = 1
         versionName = "1.0.0"
         multiDexEnabled = true
@@ -29,15 +29,16 @@ android {
 
     buildTypes {
         getByName("debug") {
-            minifyEnabled = false  // CHANGED: isMinifyEnabled -> minifyEnabled
-            signingConfig = signingConfigs.getByName("debug")
-             shrinkResources = false  // ADD THIS LINE
+            minifyEnabled = false
+            shrinkResources = false
+            // REMOVE: signingConfig = signingConfigs.getByName("debug")
+            // Flutter automatically uses debug.keystore
         }
         
         getByName("release") {
-            minifyEnabled = false  // CHANGED: isMinifyEnabled -> minifyEnabled
-            signingConfig = signingConfigs.getByName("debug")
-             shrinkResources = false  // ADD THIS LINE
+            minifyEnabled = false
+            shrinkResources = false
+            signingConfig = signingConfigs.getByName("debug") // Use debug keystore for testing
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

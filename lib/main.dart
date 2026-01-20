@@ -36,7 +36,19 @@ void main() async {
   
   runApp(const MyApp());
 }
-
+Future<void> handlePasswordResetLink(BuildContext context, Uri link) async {
+  final queryParams = link.queryParameters;
+  final mode = queryParams['mode'];
+  final oobCode = queryParams['oobCode'];
+  
+  if (mode == 'resetPassword' && oobCode != null) {
+    Navigator.pushNamed(
+      context,
+      AppRouter.resetPassword,
+      arguments: {'code': oobCode},
+    );
+  }
+}
 Future<void> createAdminUserDirectly() async {
   try {
     print('\n🔄 CHECKING/CREATING ADMIN USER...');

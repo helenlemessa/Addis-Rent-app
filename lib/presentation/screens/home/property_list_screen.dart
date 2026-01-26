@@ -22,35 +22,69 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   int? _selectedBedrooms;
   double _minPrice = 0;
   double _maxPrice = 100000;
+  // In PropertyProvider class
+ 
+  // Add this variable to track if we should restore search
+  bool _shouldRestoreSearch = true;
 
   @override
   void initState() {
     super.initState();
+    print('🔄 PropertyListScreen initState() called');
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProperties();
+      
+      // Restore search from provider if it exists
+      _restoreSearchState();
     });
   }
+  
+ void _restoreSearchState() {
+  final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
+  
+  if (propertyProvider.searchQuery.isNotEmpty) {  // Use the public getter
+    print('🔍 Restoring search query: "${propertyProvider.searchQuery}"');
+    _searchController.text = propertyProvider.searchQuery;
+    
+    // Trigger search with restored query
+    _performSearch(propertyProvider.searchQuery);
+  } else {
+    print('ℹ️ No search query to restore');
+    // Clear filters to show all properties
+    propertyProvider.clearFilters();
+  }
+}
 
+  @override
+  void dispose() {
+    print('🗑️ PropertyListScreen disposing');
+    // Don't clear provider filters when disposing
+    super.dispose();
+  }
   void _loadProperties() {
     final propertyProvider =
         Provider.of<PropertyProvider>(context, listen: false);
     propertyProvider.listenToApprovedProperties();
   }
-
-  void _performSearch() {
-    final propertyProvider =
-        Provider.of<PropertyProvider>(context, listen: false);
-    
-    propertyProvider.applyFilters(
-      query: _searchController.text.trim(),
-      location: _selectedLocation,
-      propertyType: _selectedType,
-      minPrice: _minPrice,
-      maxPrice: _maxPrice,
-      bedrooms: _selectedBedrooms,
-    );
-  }
-
+void _performSearch(String searchText) {
+  final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
+  
+  print('🔍 Performing search with: "$searchText"');
+  
+  // Only apply price filters if they're different from defaults
+  final double? minPriceToApply = (_minPrice > 0) ? _minPrice : null;
+  final double? maxPriceToApply = (_maxPrice < 100000) ? _maxPrice : null;
+  
+  propertyProvider.applyFilters(
+    query: searchText.trim(),  // Use the parameter
+    location: _selectedLocation,
+    propertyType: _selectedType,
+    minPrice: minPriceToApply,
+    maxPrice: maxPriceToApply,
+    bedrooms: _selectedBedrooms,
+  );
+}
   void _clearFilters() {
     _searchController.clear();
     _selectedLocation = null;
@@ -78,7 +112,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
           // Search Bar
           SearchFilterBar(
             onSearchChanged: (value) {
-              _performSearch();
+              _performSearch(value);
             },
             onFilterPressed: () {
               setState(() {
@@ -126,7 +160,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                       setState(() {
                         _selectedLocation = value;
                       });
-                      _performSearch();
+                      _performSearch(value ?? '');
                     },
                   ),
                   const SizedBox(height: 12),
@@ -157,7 +191,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                       setState(() {
                         _selectedType = value;
                       });
-                      _performSearch();
+                      _performSearch(value ?? '');
                     },
                   ),
                   const SizedBox(height: 12),
@@ -188,7 +222,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                       setState(() {
                         _selectedBedrooms = value;
                       });
-                      _performSearch();
+                      _performSearch(value != null ? value.toString() : '');
                     },
                   ),
                   const SizedBox(height: 12),
@@ -218,7 +252,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
                                 _minPrice = double.tryParse(value) ?? 0;
-                                _performSearch();
+                                _performSearch(value ?? '');
                               },
                             ),
                           ),
@@ -235,7 +269,7 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
                                 _maxPrice = double.tryParse(value) ?? 100000;
-                                _performSearch();
+                                _performSearch(value ?? '');
                               },
                             ),
                           ),
@@ -362,9 +396,6 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
     );
   }
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
+   
 }
+ 

@@ -1,6 +1,8 @@
 // app_router.dart
+import 'package:addis_rent/data/repositories/property_archive_repository.dart';
 import 'package:addis_rent/presentation/screens/auth/forgot_password_screen.dart';
 import 'package:addis_rent/presentation/screens/auth/reset_password_screen.dart';
+import 'package:addis_rent/presentation/screens/landlord/archived_properties_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:addis_rent/presentation/screens/splash_screen.dart';
 import 'package:addis_rent/presentation/screens/home/home_screen.dart'; // Use the real one
@@ -17,6 +19,7 @@ import 'package:addis_rent/presentation/screens/admin/approval_screen.dart';
 import 'package:addis_rent/presentation/screens/profile/profile_screen.dart';
 import 'package:addis_rent/presentation/screens/landlord/landlord_dashboard.dart'; // ADD THIS
 import 'package:addis_rent/presentation/screens/admin/property_cleanup_screen.dart';
+
 class AppRouter {
   static const String splash = '/';
   static const String login = '/login';
@@ -36,6 +39,7 @@ class AppRouter {
    static const String landlordDashboard = '/landlord-dashboard';
   static const String propertyCleanup = '/property-cleanup';
   static const String landlordHome = '/landlord-home'; // OPTIONAL
+  static const String archivedProperties = '/landlord/archived-properties';
   static Route<dynamic> generateRoute(RouteSettings settings) {
     print('📍 AppRouter: Navigating to ${settings.name}');
     
@@ -69,6 +73,10 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => const SearchScreen());
       case adminDashboard:
         return MaterialPageRoute(builder: (_) => const AdminDashboard());
+        case AppRouter.archivedProperties:
+  return MaterialPageRoute(
+    builder: (_) => const ArchivedPropertiesScreen(),
+  );
       case approval:
         return MaterialPageRoute(builder: (_) => const ApprovalScreen());case forgotPassword:
   return MaterialPageRoute(builder: (_) => const ForgotPasswordScreen());

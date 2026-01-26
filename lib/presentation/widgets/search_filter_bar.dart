@@ -33,10 +33,17 @@ class _SearchFilterBarState extends State<SearchFilterBar> {
   }
 
   void _onSearchChanged() {
+    final text = _searchController.text;
+  print('🔍 SearchFilterBar: Text changed to: "$text"');
+  
+  // Call immediately, no debounce
+  widget.onSearchChanged?.call(text);
     if (_debounce?.isActive ?? false) _debounce?.cancel();
-    
+
     _debounce = Timer(_debounceTimer, () {
-      widget.onSearchChanged?.call(_searchController.text);
+      final text = _searchController.text;
+      print('🔍 SearchFilterBar: Text changed to: "$text"');
+      widget.onSearchChanged?.call(text);
     });
   }
 
@@ -68,24 +75,27 @@ class _SearchFilterBarState extends State<SearchFilterBar> {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search properties...',
-                  border: InputBorder.none,
-                  prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear, size: 20),
-                          onPressed: _clearSearch,
-                          color: Colors.grey,
-                        )
-                      : null,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search properties...',
+                    border: InputBorder.none,
+                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 20),
+                            onPressed: _clearSearch,
+                            color: Colors.grey,
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                   ),
-                ),
-              ),
+                  onChanged: (value) {
+                    // Trigger search immediately on typing
+                    widget.onSearchChanged?.call(value);
+                  },),
             ),
           ),
           const SizedBox(width: 12),

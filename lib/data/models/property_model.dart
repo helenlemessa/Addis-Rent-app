@@ -27,7 +27,7 @@ class PropertyModel {
   final DateTime? archivedAt; // When property was archived
   final String? archivedBy; // Who archived it (landlordId or adminId)
   final bool isDeleted; // Hard delete flag (admin only)
-   
+  final DateTime? deletedAt; 
   PropertyModel({
     required this.id,
     required this.title,
@@ -58,6 +58,7 @@ class PropertyModel {
    
     this.archivedBy,
     this.isDeleted = false,
+    this.deletedAt,
   });
 
   factory PropertyModel.fromMap(Map<String, dynamic> map, String id) {
@@ -84,12 +85,13 @@ class PropertyModel {
       longitude: map['longitude']?.toDouble(),
       
       // NEW: Parse archival fields
-      isArchived: map['isArchived'] ?? false,
+ 
       archiveReason: map['archiveReason'],
       rentedAt: map['rentedAt'] != null ? DateTime.parse(map['rentedAt']) : null,
       archivedAt: map['archivedAt'] != null ? DateTime.parse(map['archivedAt']) : null,
       archivedBy: map['archivedBy'],
-      isDeleted: map['isDeleted'] ?? false,
+       isArchived: (map['isArchived'] as bool?) ?? false,
+       isDeleted: (map['isDeleted'] as bool?) ?? false,
     );
   }
 

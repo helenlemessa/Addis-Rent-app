@@ -1,6 +1,9 @@
 // lib/core/utils/helpers.dart
+import 'dart:core';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -33,13 +36,39 @@ class Helpers {
   }
 
   static Future<void> launchEmail(String email) async {
+  try {
     final url = 'mailto:$email';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url));
+    final uri = Uri.parse(url);
+    
+    // First check if we can launch it
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     } else {
-      throw 'Could not launch $url';
+      // If can't launch mailto, try to copy email to clipboard
+      print('⚠️ Cannot launch email app. No email app found.');
+      
+      // Fallback: Copy email to clipboard and show a message
+      await Clipboard.setData(ClipboardData(text: email));
+      
+      // Show a dialog or snackbar suggesting to use email app manually
+      // You'll need to pass BuildContext or use a different approach
+      // For now, just show in console
+      print('📋 Email copied to clipboard: $email');
+      print('📱 Please open your email app and paste this address');
+      
+      // You can also try opening Gmail/Outlook web
+      final gmailUrl = 'https://mail.google.com/mail/?view=cm&to=$email';
+      final outlookUrl = 'https://outlook.live.com/mail/0/deeplink/compose?to=$email';
+      
+      if (await canLaunchUrl(Uri.parse(gmailUrl))) {
+        print('📨 Try opening Gmail instead...');
+      }
     }
+  } catch (e) {
+    print('❌ Error launching email: $e');
+    rethrow;
   }
+}
 
   static Future<void> launchMap(double lat, double lng) async {
     final url = 'https://www.google.com/maps/search/?api=1&query=$lat,$lng';

@@ -1,4 +1,5 @@
 // Create new file: lib/presentation/screens/landlord/landlord_dashboard.dart
+import 'package:addis_rent/presentation/screens/landlord/archived_properties_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:addis_rent/data/models/property_model.dart';
@@ -161,15 +162,31 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
     final authProvider = context.read<AuthProvider>();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Properties'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadProperties,
+     // In lib/presentation/screens/landlord/landlord_dashboard.dart
+// Update the AppBar:
+
+appBar: AppBar(
+  title: const Text('My Properties'),
+  actions: [
+    // Add this IconButton
+    IconButton(
+      icon: const Icon(Icons.archive_outlined),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ArchivedPropertiesScreen(),
           ),
-        ],
-      ),
+        );
+      },
+      tooltip: 'View Archived Properties',
+    ),
+    IconButton(
+      icon: const Icon(Icons.refresh),
+      onPressed: _loadProperties,
+    ),
+  ],
+),
       body: Column(
         children: [
           // Tabs

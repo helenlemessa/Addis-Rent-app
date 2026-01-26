@@ -1,3 +1,5 @@
+import 'package:addis_rent/data/repositories/property_archive_repository.dart';
+import 'package:addis_rent/presentation/screens/landlord/archived_properties_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:addis_rent/presentation/providers/property_provider.dart';
@@ -45,50 +47,174 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     return properties.where((p) => p.status == _selectedFilter).toList();
   }
 
-  void _showPropertyActions(PropertyModel property, BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.remove_red_eye),
-            title: const Text('View Details'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) =>
-                      PropertyDetailScreen(propertyId: property.id),
-                ),
-              );
-            },
-          ),
-          if (property.status == 'pending' || property.status == 'rejected')
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Edit Property'),
-              onTap: () {
-                Navigator.pop(context);
-                // Navigate to edit screen
-                _editProperty(property);
-              },
-            ),
-          ListTile(
-            leading: const Icon(Icons.delete, color: Colors.red),
-            title: const Text('Delete Property',
-                style: TextStyle(color: Colors.red)),
-            onTap: () {
-              Navigator.pop(context);
-              _deleteProperty(property);
-            },
-          ),
-        ],
-      ),
-    );
-  }
+// In lib/presentation/screens/landlord/my_properties_screen.dart
+// Update your _showPropertyActions method:
 
+void _showPropertyActions(PropertyModel property, BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    builder: (context) => Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.remove_red_eye),
+          title: const Text('View Details'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    PropertyDetailScreen(propertyId: property.id),
+              ),
+            );
+          },
+        ),
+        if (property.status == 'pending' || property.status == 'rejected')
+          ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text('Edit Property'),
+            onTap: () {
+              Navigator.pop(context);
+              _editProperty(property);
+            },
+          ),
+        // Add "Mark as Rented" option
+        if (!property.isArchived && property.status == 'approved')
+          ListTile(
+            leading: const Icon(Icons.check_circle, color: Colors.green),
+            title: const Text('Mark as Rented'),
+            onTap: () {
+              Navigator.pop(context);
+              _markAsRented(property);
+            },
+          ),
+        // Add Archive option for active properties
+        if (!property.isArchived)
+          ListTile(
+            leading: const Icon(Icons.archive_outlined),
+            title: const Text('Archive Property'),
+            onTap: () {
+              Navigator.pop(context);
+              _archiveProperty(property);
+            },
+          ),
+        // Add Restore option for archived properties
+        if (property.isArchived)
+          ListTile(
+            leading: const Icon(Icons.restore),
+            title: const Text('Restore Property'),
+            onTap: () {
+              Navigator.pop(context);
+              _restoreProperty(property);
+            },
+          ),
+        ListTile(
+          leading: const Icon(Icons.delete, color: Colors.red),
+          title: const Text('Delete Property',
+              style: TextStyle(color: Colors.red)),
+          onTap: () {
+            Navigator.pop(context);
+            _deleteProperty(property);
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+// Add this method for "Mark as Rented"
+Future<void> _markAsRented(PropertyModel property) async {
+  final confirmed = await Helpers.showConfirmationDialog(
+    context,
+    title: 'Mark as Rented',
+    content: 'Are you sure you want to mark "${property.title}" as rented?',
+    confirmText: 'Mark as Rented',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    final archiveRepository = PropertyArchiveRepository();
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.currentUser!;
+    
+    await archiveRepository.markAsRented(
+      propertyId: property.id,
+      landlordId: user.id,
+      reason: 'Property rented',
+    );
+    
+    Helpers.showSnackBar(context, 'Property marked as rented');
+    
+    // Refresh the list
+    final propertyProvider = context.read<PropertyProvider>();
+    propertyProvider.listenToMyProperties(user.id);
+  } catch (e) {
+    Helpers.showSnackBar(context, 'Error marking property as rented: $e', isError: true);
+  }
+}
+// In lib/presentation/screens/landlord/my_properties_screen.dart
+// Add these missing methods:
+
+Future<void> _archiveProperty(PropertyModel property) async {
+  final confirmed = await Helpers.showConfirmationDialog(
+    context,
+    title: 'Archive Property',
+    content: 'Are you sure you want to archive "${property.title}"?',
+    confirmText: 'Archive',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    final propertyProvider = context.read<PropertyProvider>();
+    
+    // Check if archiveProperty method exists, otherwise use repository directly
+    final archiveRepository = PropertyArchiveRepository();
+    final authProvider = context.read<AuthProvider>();
+    final user = authProvider.currentUser!;
+    
+    await archiveRepository.softDeleteProperty(
+      propertyId: property.id,
+      landlordId: user.id,
+    );
+    
+    Helpers.showSnackBar(context, 'Property archived');
+    
+    // Refresh the list
+    propertyProvider.listenToMyProperties(user.id);
+  } catch (e) {
+    Helpers.showSnackBar(context, 'Error archiving property: $e', isError: true);
+  }
+}
+
+Future<void> _restoreProperty(PropertyModel property) async {
+  final confirmed = await Helpers.showConfirmationDialog(
+    context,
+    title: 'Restore Property',
+    content: 'Are you sure you want to restore "${property.title}"?',
+    confirmText: 'Restore',
+  );
+
+  if (!confirmed) return;
+
+  try {
+    final archiveRepository = PropertyArchiveRepository();
+    await archiveRepository.restoreProperty(property.id);
+    
+    Helpers.showSnackBar(context, 'Property restored successfully!');
+    
+    // Refresh the list
+    final propertyProvider = context.read<PropertyProvider>();
+    final authProvider = context.read<AuthProvider>();
+    if (authProvider.currentUser != null) {
+      propertyProvider.listenToMyProperties(authProvider.currentUser!.id);
+    }
+  } catch (e) {
+    Helpers.showSnackBar(context, 'Error restoring property: $e', isError: true);
+  }
+}
   void _editProperty(PropertyModel property) {
     // TODO: Implement edit property screen
     Helpers.showSnackBar(context, 'Edit feature coming soon!');
@@ -136,21 +262,33 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Properties'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddPropertyScreen(),
-                ),
-              );
-            },
+  title: const Text('My Properties'),
+  actions: [
+    IconButton(
+      icon: const Icon(Icons.archive_outlined),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const ArchivedPropertiesScreen(),
           ),
-        ],
-      ),
+        );
+      },
+      tooltip: 'View Archived Properties',
+    ),
+    IconButton(
+      icon: const Icon(Icons.add),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const AddPropertyScreen(),
+          ),
+        );
+      },
+    ),
+  ],
+),
       body: Column(
         children: [
           // Filter Chips
@@ -273,3 +411,5 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> {
     );
   }
 }
+
+ 

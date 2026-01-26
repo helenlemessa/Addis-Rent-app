@@ -1,3 +1,4 @@
+import 'package:addis_rent/presentation/providers/favorite_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
@@ -40,16 +41,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _loadUserData() {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final user = authProvider.currentUser;
+  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+  final favoriteProvider = Provider.of<FavoriteProvider>(context, listen: false);
+  final user = authProvider.currentUser;
 
-    if (user != null) {
-      _fullNameController.text = user.fullName;
-      _phoneController.text = user.phone;
-      _emailController.text = user.email;
-      _profileImage = user.profileImage;
+  if (user != null) {
+    _fullNameController.text = user.fullName;
+    _phoneController.text = user.phone;
+    _emailController.text = user.email;
+    _profileImage = user.profileImage;
+    
+    // Load favorites if user is tenant
+    if (user.role == 'tenant') {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        favoriteProvider.loadFavoriteProperties(user.id);
+      });
     }
   }
+}
 
   // ADD THIS METHOD: Load property count for landlords
   void _loadPropertyCount() {
@@ -212,7 +221,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-
+Future<void> _refreshFavorites() async {
+  final authProvider = Provider.of<AuthProvider>(context, listen: false);
+  final favoriteProvider = Provider.of<FavoriteProvider>(context, listen: false);
+  final user = authProvider.currentUser;
+  
+  if (user != null && user.role == 'tenant') {
+    await favoriteProvider.loadFavoriteProperties(user.id);
+    
+    // Show success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Favorites refreshed'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+}
   Future<void> _deleteAccount() async {
     final confirmed = await Helpers.showConfirmationDialog(
       context,
@@ -391,58 +417,61 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Widget _buildStatsSection() {
-    final authProvider = Provider.of<AuthProvider>(context);
-    final user = authProvider.currentUser!;
-    
-    // Get property provider to access favorites count for tenants
-    final propertyProvider = Provider.of<PropertyProvider>(context);
-    final favoriteCount = propertyProvider.properties
-        .where((p) => p.status == 'approved')
-        .length; // This would need actual favorite logic
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
+ Widget _buildStatsSection() {
+  final authProvider = Provider.of<AuthProvider>(context);
+  final user = authProvider.currentUser!;
+  
+  // Get favorite provider to access actual favorites count
+  final favoriteProvider = Provider.of<FavoriteProvider>(context);
+  
+  // Get property provider
+  final propertyProvider = Provider.of<PropertyProvider>(context);
+  
+  // ACTUAL favorite count from FavoriteProvider
+  final favoriteCount = favoriteProvider.favoriteProperties.length;
+  
+  return Container(
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade50,
+      borderRadius: BorderRadius.circular(16),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
+      children: [
+        _buildStatItem(
+          icon: Icons.calendar_today,
+          label: 'Member Since',
+          value: Helpers.formatDate(user.createdAt),
+        ),
+        
+        // Show property count for landlords
+        if (user.role == 'landlord')
           _buildStatItem(
-            icon: Icons.calendar_today,
-            label: 'Member Since',
-            value: Helpers.formatDate(user.createdAt),
+            icon: Icons.apartment,
+            label: 'Properties',
+            value: '$_propertyCount',
           ),
-          
-          // Show property count for landlords
-          if (user.role == 'landlord')
-            _buildStatItem(
-              icon: Icons.apartment,
-              label: 'Properties',
-              value: '$_propertyCount', // Use actual count
-            ),
-          
-          // Show favorites count for tenants
-          if (user.role == 'tenant')
-            _buildStatItem(
-              icon: Icons.favorite,
-              label: 'Favorites',
-              value: '$favoriteCount',
-            ),
-          
-          // Show pending properties count for landlords
-          if (user.role == 'landlord')
-            _buildStatItem(
-              icon: Icons.access_time,
-              label: 'Pending',
-              value: '${propertyProvider.myProperties.where((p) => p.status == 'pending').length}',
-            ),
-        ],
-      ),
-    );
-  }
+        
+        // Show ACTUAL favorites count for tenants
+        if (user.role == 'tenant')
+          _buildStatItem(
+            icon: Icons.favorite,
+            label: 'Favorites',
+            value: '$favoriteCount',
+          ),
+        
+        // Show pending properties count for landlords
+        if (user.role == 'landlord')
+          _buildStatItem(
+            icon: Icons.access_time,
+            label: 'Pending',
+            value: '${propertyProvider.myProperties.where((p) => p.status == 'pending').length}',
+          ),
+      ],
+    ),
+  );
+}
 
   Widget _buildStatItem({
     required IconData icon,
@@ -626,23 +655,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildActionButtons() {
-    return Column(
-      children: [
-        if (!_isEditing)
-          Row(
-            children: [
-              Expanded(
-                child: PrimaryButton(
-                  onPressed: () {
-                    setState(() {
-                      _isEditing = true;
-                    });
-                  },
-                  child: const Text('Edit Profile'),
-                ),
+    final authProvider = Provider.of<AuthProvider>(context);
+  final user = authProvider.currentUser!;
+  
+  return Column(
+    children: [
+      if (!_isEditing)
+        Row(
+          children: [
+            Expanded(
+              child: PrimaryButton(
+                onPressed: () {
+                  setState(() {
+                    _isEditing = true;
+                  });
+                },
+                child: const Text('Edit Profile'),
               ),
-            ],
-          ),
+            ),
+            // Add refresh button for tenant favorites
+            if (user.role == 'tenant')
+              IconButton(
+                onPressed: _isLoading ? null : _refreshFavorites,
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refresh Favorites',
+              ),
+          ],
+        ),
         if (_isEditing)
           Column(
             children: [

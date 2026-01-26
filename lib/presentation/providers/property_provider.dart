@@ -37,7 +37,24 @@ class PropertyProvider with ChangeNotifier {
   PropertyModel? get selectedProperty => _selectedProperty;
   bool get isLoading => _isLoading;
   String? get error => _error;
+// In PropertyProvider class
+String get searchQuery => _searchQuery;  // Add this public getter
+// In PropertyProvider class
+bool get hasActiveSearch => _searchQuery.isNotEmpty;
+bool get hasActiveFilters => 
+    _searchQuery.isNotEmpty ||
+    _selectedLocation != null ||
+    _selectedType != null ||
+    _minPrice != null ||
+    _maxPrice != null ||
+    _selectedBedrooms != null;
 
+void resetToDefault() {
+  // Only reset if we have active filters
+  if (hasActiveFilters) {
+    clearFilters();
+  }
+}
   // Get unique locations from ALL properties (not just filtered)
   List<String> get uniqueLocations {
     if (_properties.isEmpty) return [];
@@ -75,25 +92,50 @@ class PropertyProvider with ChangeNotifier {
     return parts.isEmpty ? 'No filters applied' : parts.join(' • ');
   }
 
-  // ================== REAL-TIME LISTENERS ==================
-
-  // For Admin: Listen to ALL properties
 void listenToAllProperties() {
   _clearSubscriptions();
   
+  print('👑 Starting listenToAllProperties() for admin');
+  
+  // Get ALL properties first, then filter in memory
   _allPropertiesSubscription = _firestore
       .collection('properties')
       .orderBy('createdAt', descending: true)
       .snapshots()
       .listen((snapshot) {
-    _handlePropertySnapshot(snapshot, 'total');
+    
+    print('📥 Received ${snapshot.docs.length} total properties');
+    
+    final allProperties = snapshot.docs.map((doc) {
+      return PropertyModel.fromMap(
+        doc.data()! as Map<String, dynamic>,
+        doc.id,
+      );
+    }).toList();
+    
+    // Filter out deleted properties in memory
+    // This handles both missing isDeleted field and isDeleted = true
+    final nonDeletedProperties = allProperties.where((p) => !p.isDeleted).toList();
+    
+    print('✅ Non-deleted properties: ${nonDeletedProperties.length}');
+    
+    // Debug: List all properties with their isDeleted status
+    allProperties.forEach((p) {
+      print('🔍 ${p.id} - Title: "${p.title}" - isDeleted: ${p.isDeleted} - isArchived: ${p.isArchived}');
+    });
+    
+    _properties = nonDeletedProperties;
+    _filterProperties();
+    
+    print('🎯 Final admin properties: ${_properties.length}');
+    
+    notifyListeners();
   }, onError: (error) {
+    print('🔥 listenToAllProperties error: $error');
     _error = 'Real-time error: $error';
-    print('❌ Real-time listener error: $error');
     notifyListeners();
   });
 }
-
   // For Tenant Browse: Listen to APPROVED properties only
 void listenToApprovedProperties() {
   _clearSubscriptions();
@@ -188,13 +230,49 @@ void listenToMyProperties(String landlordId) {
     
     notifyListeners();
   }
-
-  void _clearSubscriptions() {
-    _allPropertiesSubscription?.cancel();
-    _myPropertiesSubscription?.cancel();
-    _approvedPropertiesSubscription?.cancel();
+void _clearSubscriptions() {
+  print('🗑️ Clearing subscriptions:');
+  print('   _allPropertiesSubscription: ${_allPropertiesSubscription != null}');
+  print('   _myPropertiesSubscription: ${_myPropertiesSubscription != null}');
+  print('   _approvedPropertiesSubscription: ${_approvedPropertiesSubscription != null}');
+  
+  _allPropertiesSubscription?.cancel();
+  _myPropertiesSubscription?.cancel();
+  _approvedPropertiesSubscription?.cancel();
+  
+  _allPropertiesSubscription = null;
+  _myPropertiesSubscription = null;
+  _approvedPropertiesSubscription = null;
+  
+  print('✅ All subscriptions cleared');
+}
+Future<void> initializeIsDeletedField() async {
+  try {
+    print('🔧 Initializing isDeleted field for all properties...');
+    
+    final snapshot = await _firestore.collection('properties').get();
+    int updatedCount = 0;
+    
+    for (final doc in snapshot.docs) {
+      final data = doc.data();
+      
+      // If isDeleted field doesn't exist
+      if (!data.containsKey('isDeleted')) {
+        await doc.reference.update({
+          'isDeleted': false,
+          'updatedAt': DateTime.now().toIso8601String(),
+        });
+        updatedCount++;
+        print('✅ Added isDeleted to property: ${doc.id}');
+      }
+    }
+    
+    print('🎉 Done! Updated ${updatedCount} properties');
+    
+  } catch (e) {
+    print('❌ Error initializing isDeleted: $e');
   }
-
+}
   // ================== CRUD OPERATIONS ==================
 
   Future<void> createProperty(PropertyModel property) async {
@@ -268,24 +346,40 @@ void listenToMyProperties(String landlordId) {
     }
   }
 
-  Future<void> deleteProperty(String propertyId) async {
-    _isLoading = true;
-    notifyListeners();
+ Future<void> deleteProperty(String propertyId) async {
+  _isLoading = true;
+  notifyListeners();
 
-    try {
-      await _firestore
-          .collection('properties')
-          .doc(propertyId)
-          .delete();
-
-    } catch (e) {
-      _error = 'Failed to delete property: $e';
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+  try {
+    // Check if property is pending
+    final propertyDoc = await _firestore.collection('properties').doc(propertyId).get();
+    final isPending = propertyDoc.exists && (propertyDoc.data()?['status'] == 'pending');
+    
+    if (isPending) {
+      // SOFT DELETE for pending properties - mark as deleted
+      await _firestore.collection('properties').doc(propertyId).update({
+        'isDeleted': true,
+        'deletedAt': DateTime.now().toIso8601String(),
+        'updatedAt': DateTime.now().toIso8601String(),
+      });
+    } else {
+      // HARD DELETE for other properties
+      await _firestore.collection('properties').doc(propertyId).delete();
     }
+
+    // Update local state
+    _properties.removeWhere((p) => p.id == propertyId);
+    _filteredProperties.removeWhere((p) => p.id == propertyId);
+    _myProperties.removeWhere((p) => p.id == propertyId);
+
+  } catch (e) {
+    _error = 'Failed to delete property: $e';
+    rethrow;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
   }
+}
 
   // ================== LOAD INDIVIDUAL PROPERTY ==================
 
@@ -317,95 +411,167 @@ void listenToMyProperties(String landlordId) {
     }
   }
 
-  // ================== FILTER METHODS ==================
-
-  void applyFilters({
-    String? query,
-    String? location,
-    String? propertyType,
-    double? minPrice,
-    double? maxPrice,
-    int? bedrooms,
-  }) {
-    _searchQuery = query ?? _searchQuery;
-    _selectedLocation = location;
-    _selectedType = propertyType;
-    _minPrice = minPrice;
-    _maxPrice = maxPrice;
-    _selectedBedrooms = bedrooms;
-
-    _filterProperties();
-    notifyListeners();
-    
-    print('🔍 Filters applied:');
-    print('   Query: $_searchQuery');
-    print('   Location: $_selectedLocation');
-    print('   Type: $_selectedType');
-    print('   Price: $_minPrice - $_maxPrice');
-    print('   Bedrooms: $_selectedBedrooms');
-    print('   Results: ${_filteredProperties.length}');
+void applyFilters({
+  String? query,
+  String? location,
+  String? propertyType,
+  double? minPrice,
+  double? maxPrice,
+  int? bedrooms,
+}) {
+  // Debug what we're receiving
+  print('🔍 applyFilters() called with:');
+  print('   query: "$query"');
+  print('   location: $location');
+  print('   propertyType: $propertyType');
+  
+  // FIX: Always update search query when query parameter is provided
+  // Even if it's an empty string!
+  if (query != null) {
+    _searchQuery = query;
+    print('✅ Updated _searchQuery to: "$_searchQuery"');
+  } else {
+    print('ℹ️ No query provided, keeping: "$_searchQuery"');
   }
+  
+  _selectedLocation = location;
+  _selectedType = propertyType;
+  _minPrice = minPrice;
+  _maxPrice = maxPrice;
+  _selectedBedrooms = bedrooms;
 
- void _filterProperties() {
+  _filterProperties();
+  notifyListeners();
+  
+  print('🔍 Filtered results: ${_filteredProperties.length}');
+}
+
+void _filterProperties() {
+  print('🔍 Starting _filterProperties()');
+  print('   Search query: "$_searchQuery"');
+  print('   Total properties: ${_properties.length}');
+  
+  // Always start by filtering out archived properties first
+  final List<PropertyModel> activeProperties = 
+      _properties.where((p) => !p.isArchived && !p.isDeleted).toList();
+  
+  print('   Active properties (non-archived,non-deleted): ${activeProperties.length}');
+  
   if (_searchQuery.isEmpty &&
       _selectedLocation == null &&
       _selectedType == null &&
       _minPrice == null &&
       _maxPrice == null &&
       _selectedBedrooms == null) {
-    // Filter out archived properties
-    _filteredProperties = _properties.where((p) => !p.isArchived).toList();
+    // No filters, just show all active properties
+    _filteredProperties = activeProperties;
+    print('   No filters, showing ${_filteredProperties.length} active properties');
     return;
   }
 
-    _filteredProperties = _properties.where((property) {
-       if (property.isArchived) return false;
-      // Search query filter
-      if (_searchQuery.isNotEmpty) {
-        final matchesQuery =
-            property.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-                property.description
-                    .toLowerCase()
-                    .contains(_searchQuery.toLowerCase()) ||
-                property.location
-                    .toLowerCase()
-                    .contains(_searchQuery.toLowerCase());
-        if (!matchesQuery) return false;
+  // Apply all other filters to active properties
+  _filteredProperties = activeProperties.where((property) {
+    bool passesAllFilters = true;
+    
+    // Search query filter
+    if (_searchQuery.isNotEmpty) {
+      final query = _searchQuery.toLowerCase();
+      final matchesQuery =
+          property.title.toLowerCase().contains(query) ||
+          property.description.toLowerCase().contains(query) ||
+          property.location.toLowerCase().contains(query);
+      
+      if (!matchesQuery) {
+        passesAllFilters = false;
       }
+    }
 
-      // Location filter
-      if (_selectedLocation != null && property.location != _selectedLocation) {
-        return false;
+    // Location filter
+    if (passesAllFilters && _selectedLocation != null) {
+      if (property.location.toLowerCase() != _selectedLocation!.toLowerCase()) {
+        passesAllFilters = false;
       }
+    }
 
-      // Property type filter
-      if (_selectedType != null && property.propertyType != _selectedType) {
-        return false;
+    // Property type filter
+    if (passesAllFilters && _selectedType != null) {
+      if (property.propertyType.toLowerCase() != _selectedType!.toLowerCase()) {
+        passesAllFilters = false;
       }
+    }
 
-      // Price filter
-      if (_minPrice != null && property.price < _minPrice!) {
-        return false;
+    // Price filter
+    if (passesAllFilters && _minPrice != null) {
+      if (property.price < _minPrice!) {
+        passesAllFilters = false;
       }
-      if (_maxPrice != null && property.price > _maxPrice!) {
-        return false;
+    }
+    
+    if (passesAllFilters && _maxPrice != null) {
+      if (property.price > _maxPrice!) {
+        passesAllFilters = false;
       }
+    }
 
-      // Bedrooms filter
-      if (_selectedBedrooms != null && property.bedrooms != _selectedBedrooms) {
-        return false;
+    // Bedrooms filter
+    if (passesAllFilters && _selectedBedrooms != null) {
+      if (property.bedrooms != _selectedBedrooms) {
+        passesAllFilters = false;
       }
+    }
 
-      return true;
-    }).toList();
+    return passesAllFilters;
+  }).toList();
+  
+  print('   Filtered properties: ${_filteredProperties.length}');
+}
+  // In lib/presentation/providers/property_provider.dart
+// Add this method to your PropertyProvider class:
+
+Future<void> archiveProperty({
+  required String propertyId,
+  required String reason,
+}) async {
+  _isLoading = true;
+  notifyListeners();
+
+  try {
+    final user = _auth.currentUser;
+    if (user == null) throw Exception('User not authenticated');
+    
+    // Update property in Firestore
+    await _firestore
+        .collection('properties')
+        .doc(propertyId)
+        .update({
+          'isArchived': true,
+          'archiveReason': reason,
+          'archivedAt': DateTime.now().toIso8601String(),
+          'archivedBy': user.uid,
+          'updatedAt': DateTime.now().toIso8601String(),
+        });
+
+    // Update local state
+    _properties.removeWhere((p) => p.id == propertyId);
+    _filteredProperties.removeWhere((p) => p.id == propertyId);
+    _myProperties.removeWhere((p) => p.id == propertyId);
+
+  } catch (e) {
+    _error = 'Failed to archive property: $e';
+    rethrow;
+  } finally {
+    _isLoading = false;
+    notifyListeners();
   }
+}
 void listenToPendingProperties() {
   _clearSubscriptions();
   
   _allPropertiesSubscription = _firestore
       .collection('properties')
       .where('status', isEqualTo: 'pending')
-      .snapshots() // REMOVE orderBy
+      .where('isDeleted', isNotEqualTo: true) // Keep this
+      .snapshots()
       .listen((snapshot) {
     _handlePropertySnapshot(snapshot, 'pending');
   }, onError: (error) {
@@ -415,19 +581,18 @@ void listenToPendingProperties() {
   });
 }
   void clearFilters() {
-    _searchQuery = '';
-    _selectedLocation = null;
-    _selectedType = null;
-    _minPrice = null;
-    _maxPrice = null;
-    _selectedBedrooms = null;
+  _searchQuery = '';
+  _selectedLocation = null;
+  _selectedType = null;
+  _minPrice = null;
+  _maxPrice = null;
+  _selectedBedrooms = null;
 
-    _filteredProperties = List.from(_properties);
-    notifyListeners();
-    
-    print('🧹 All filters cleared');
-  }
-
+  _filterProperties(); // <-- CORRECT! Call the filter method
+  notifyListeners();
+  
+  print('🧹 All filters cleared');
+}
   // Search method for home page
   void search(String query) {
     _searchQuery = query.trim();

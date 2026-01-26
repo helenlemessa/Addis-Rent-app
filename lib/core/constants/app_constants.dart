@@ -46,6 +46,11 @@ class AppConstants {
     'Kolfe',
     'Nifas Silk',
     'Akaki',
+    'Lemi Kura',
+    'Gulele',
+    'Addis ketema',
+    'Kirkos',
+    'Other',
   ];
 
   // Amenities

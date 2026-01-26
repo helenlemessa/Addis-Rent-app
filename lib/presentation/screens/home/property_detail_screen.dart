@@ -1,5 +1,6 @@
 import 'package:addis_rent/data/models/property_model.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:addis_rent/presentation/providers/property_provider.dart';
 import 'package:addis_rent/presentation/providers/favorite_provider.dart';
@@ -86,13 +87,39 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
     }
   }
 
-  Future<void> _emailLandlord(String email) async {
-    try {
-      await Helpers.launchEmail(email);
-    } catch (e) {
-      Helpers.showSnackBar(context, 'Could not send email: $e', isError: true);
-    }
+ Future<void> _emailLandlord(String email) async {
+  try {
+    await Helpers.launchEmail(email);
+  } catch (e) {
+    // If email launch fails, copy to clipboard
+    await Clipboard.setData(ClipboardData(text: email));
+    
+    // Show a better error message
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Email App Not Found'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('No email app found on your device.'),
+            const SizedBox(height: 8),
+            Text('Email address: $email'),
+            const SizedBox(height: 16),
+            const Text('The email address has been copied to your clipboard.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {

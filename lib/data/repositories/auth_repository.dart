@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:addis_rent/data/models/user_model.dart';
 import 'package:addis_rent/core/constants/app_constants.dart';
-
+import 'package:addis_rent/core/errors/auth_errors.dart';
 class AuthRepository {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -171,7 +171,7 @@ Future<UserModel> register({
     print('========================================\n');
     rethrow;
   }
-}
+} 
 
   Future<UserModel> login({
   required String email,
@@ -180,15 +180,43 @@ Future<UserModel> register({
   print('\n🔐 ========== LOGIN ATTEMPT ==========');
   print('📧 Email: $email');
   
+  UserCredential credential;
+  
   try {
     // 1. Firebase Auth login
-    final credential = await _auth.signInWithEmailAndPassword(
-      email: email,
+    credential = await _auth.signInWithEmailAndPassword(
+      email: email.trim(),
       password: password,
     );
     
     print('✅ Firebase Auth successful: ${credential.user!.uid}');
     
+  } on FirebaseAuthException catch (e) {
+    print('❌ ======== FIREBASE AUTH ERROR DETAILS ========');
+    print('Error Code: "${e.code}"');
+    print('Error Message: "${e.message}"');
+    print('==============================================');
+    
+    // Get user-friendly message
+    final errorMessage = AuthErrorHandler.getFirebaseAuthErrorMessage(e.code);
+    print('Translated to user message: "$errorMessage"');
+    
+    throw Exception(errorMessage);
+  } catch (e) {
+    print('❌ ======== NON-FIREBASE ERROR DETAILS ========');
+    print('Error Type: ${e.runtimeType}');
+    print('Error: $e');
+    print('==============================================');
+    
+    // Get user-friendly message
+    final errorMessage = AuthErrorHandler.getGenericErrorMessage(e);
+    print('Translated to user message: "$errorMessage"');
+    
+    throw Exception(errorMessage);
+  }
+  
+  // From here down, we know Firebase login was successful
+  try {
     // 2. Get user document from Firestore
     final doc = await _firestore
         .collection(AppConstants.usersCollection)
@@ -296,8 +324,8 @@ Future<UserModel> register({
     }
     
   } catch (e) {
-    print('❌ Login error: $e');
-    rethrow;
+    print('❌ Error after Firebase login (Firestore/user processing): $e');
+    throw Exception('Login successful, but there was an error loading your profile. Please try again.');
   }
 }
 
@@ -551,60 +579,7 @@ Future<UserModel> loginWithGoogle() async {
     }
   }
   
-  Future<void> createAdminUser() async {
-    try {
-      final adminEmail = 'admin@demo.com';
-      final adminPassword = 'Admin123!';
-      
-      print('🔄 Creating admin user with email: $adminEmail');
-      
-      UserCredential authResult = await FirebaseAuth.instance
-        .createUserWithEmailAndPassword(
-          email: adminEmail,
-          password: adminPassword,
-        );
-      
-      print('✅ Firebase Auth user created: ${authResult.user!.uid}');
-      
-      await FirebaseFirestore.instance
-        .collection('users')
-        .doc(authResult.user!.uid)
-        .set({
-          'id': authResult.user!.uid,
-          'email': adminEmail,
-          'fullName': 'Admin User',
-          'phone': '+251911111111',
-          'role': 'admin',
-          'isVerified': true,
-          'isSuspended': false,
-          'createdAt': DateTime.now().toIso8601String(),
-        });
-      
-      print('✅ Admin user created successfully!');
-      print('📧 Login with: $adminEmail');
-      print('🔑 Password: $adminPassword');
-      
-    } catch (e) {
-      print('❌ Error creating admin: $e');
-      
-      if (e is FirebaseAuthException && e.code == 'email-already-in-use') {
-        print('⚠️ Admin user already exists in Firebase Auth');
-        print('🔍 Checking Firestore for admin document...');
-        
-        final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .where('email', isEqualTo: 'admin@demo.com')
-          .limit(1)
-          .get();
-        
-        if (snapshot.docs.isNotEmpty) {
-          print('✅ Admin user exists in Firestore');
-          print('📋 Admin data: ${snapshot.docs.first.data()}');
-        }
-      }
-    }
-  }
-  // In lib/data/repositories/auth_repository.dart, add these methods:
+   // In lib/data/repositories/auth_repository.dart, add these methods:
 
 Future<void> sendPasswordResetEmail(String email) async {
   print('\n🔄 ========== PASSWORD RESET REQUEST ==========');

@@ -19,12 +19,9 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
   bool _showFilters = false;
   String? _selectedLocation;
   String? _selectedType;
-  int? _selectedBedrooms;
+  int? _selectedBedrooms; // This is already int?
   double _minPrice = 0;
   double _maxPrice = 100000;
-  // In PropertyProvider class
- 
-  // Add this variable to track if we should restore search
   bool _shouldRestoreSearch = true;
 
   @override
@@ -34,57 +31,56 @@ class _PropertyListScreenState extends State<PropertyListScreen> {
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadProperties();
-      
-      // Restore search from provider if it exists
       _restoreSearchState();
     });
   }
   
- void _restoreSearchState() {
-  final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
-  
-  if (propertyProvider.searchQuery.isNotEmpty) {  // Use the public getter
-    print('🔍 Restoring search query: "${propertyProvider.searchQuery}"');
-    _searchController.text = propertyProvider.searchQuery;
+  void _restoreSearchState() {
+    final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
     
-    // Trigger search with restored query
-    _performSearch(propertyProvider.searchQuery);
-  } else {
-    print('ℹ️ No search query to restore');
-    // Clear filters to show all properties
-    propertyProvider.clearFilters();
+    if (propertyProvider.searchQuery.isNotEmpty) {
+      print('🔍 Restoring search query: "${propertyProvider.searchQuery}"');
+      _searchController.text = propertyProvider.searchQuery;
+      _performSearch(propertyProvider.searchQuery);
+    } else {
+      print('ℹ️ No search query to restore');
+      propertyProvider.clearFilters();
+    }
   }
-}
 
   @override
   void dispose() {
     print('🗑️ PropertyListScreen disposing');
-    // Don't clear provider filters when disposing
     super.dispose();
   }
+
   void _loadProperties() {
     final propertyProvider =
         Provider.of<PropertyProvider>(context, listen: false);
     propertyProvider.listenToApprovedProperties();
   }
-void _performSearch(String searchText) {
-  final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
-  
-  print('🔍 Performing search with: "$searchText"');
-  
-  // Only apply price filters if they're different from defaults
-  final double? minPriceToApply = (_minPrice > 0) ? _minPrice : null;
-  final double? maxPriceToApply = (_maxPrice < 100000) ? _maxPrice : null;
-  
-  propertyProvider.applyFilters(
-    query: searchText.trim(),  // Use the parameter
-    location: _selectedLocation,
-    propertyType: _selectedType,
-    minPrice: minPriceToApply,
-    maxPrice: maxPriceToApply,
-    bedrooms: _selectedBedrooms,
-  );
-}
+
+  void _performSearch(String searchText) {
+    final propertyProvider = Provider.of<PropertyProvider>(context, listen: false);
+    
+    print('🔍 Performing search with: "$searchText"');
+    print('   Bedrooms selected: $_selectedBedrooms');
+    
+    // Only apply price filters if they're different from defaults
+    final double? minPriceToApply = (_minPrice > 0) ? _minPrice : null;
+    final double? maxPriceToApply = (_maxPrice < 100000) ? _maxPrice : null;
+    
+    // FIXED: Always pass _selectedBedrooms directly, don't convert
+    propertyProvider.applyFilters(
+      query: searchText.trim(),
+      location: _selectedLocation,
+      propertyType: _selectedType,
+      minPrice: minPriceToApply,
+      maxPrice: maxPriceToApply,
+      bedrooms: _selectedBedrooms, // This is already int?
+    );
+  }
+
   void _clearFilters() {
     _searchController.clear();
     _selectedLocation = null;
@@ -160,7 +156,7 @@ void _performSearch(String searchText) {
                       setState(() {
                         _selectedLocation = value;
                       });
-                      _performSearch(value ?? '');
+                      _performSearch(_searchController.text);
                     },
                   ),
                   const SizedBox(height: 12),
@@ -191,12 +187,12 @@ void _performSearch(String searchText) {
                       setState(() {
                         _selectedType = value;
                       });
-                      _performSearch(value ?? '');
+                      _performSearch(_searchController.text);
                     },
                   ),
                   const SizedBox(height: 12),
                   
-                  // Bedrooms Filter
+                  // Bedrooms Filter - FIXED
                   DropdownButtonFormField<int>(
                     value: _selectedBedrooms,
                     decoration: const InputDecoration(
@@ -222,7 +218,8 @@ void _performSearch(String searchText) {
                       setState(() {
                         _selectedBedrooms = value;
                       });
-                      _performSearch(value != null ? value.toString() : '');
+                      // FIXED: Pass current search text, not value.toString()
+                      _performSearch(_searchController.text);
                     },
                   ),
                   const SizedBox(height: 12),
@@ -252,7 +249,7 @@ void _performSearch(String searchText) {
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
                                 _minPrice = double.tryParse(value) ?? 0;
-                                _performSearch(value ?? '');
+                                _performSearch(_searchController.text);
                               },
                             ),
                           ),
@@ -269,7 +266,7 @@ void _performSearch(String searchText) {
                               keyboardType: TextInputType.number,
                               onChanged: (value) {
                                 _maxPrice = double.tryParse(value) ?? 100000;
-                                _performSearch(value ?? '');
+                                _performSearch(_searchController.text);
                               },
                             ),
                           ),
@@ -333,25 +330,25 @@ void _performSearch(String searchText) {
                       // Properties List
                       Expanded(
                         child: propertyProvider.filteredProperties.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.search_off,
+                                    const Icon(Icons.search_off,
                                         size: 64, color: Colors.grey),
-                                    SizedBox(height: 16),
-                                    Text(
+                                    const SizedBox(height: 16),
+                                    const Text(
                                       'No properties found',
                                       style: TextStyle(
                                           fontSize: 18, color: Colors.grey),
                                     ),
-                                    SizedBox(height: 8),
+                                    const SizedBox(height: 8),
                                     Padding(
-                                      padding: EdgeInsets.symmetric(
+                                      padding: const EdgeInsets.symmetric(
                                           horizontal: 32.0),
                                       child: Text(
                                         'Try adjusting your search or filters',
-                                        style: TextStyle(color: Colors.grey),
+                                        style: TextStyle(color: Colors.grey.shade600),
                                         textAlign: TextAlign.center,
                                       ),
                                     ),
@@ -382,7 +379,7 @@ void _performSearch(String searchText) {
                                           ),
                                         );
                                       },
-                                       isInitiallyFavorite: false,
+                                      isInitiallyFavorite: false,
                                     );
                                   },
                                 ),
@@ -395,7 +392,4 @@ void _performSearch(String searchText) {
       ),
     );
   }
-
-   
 }
- 

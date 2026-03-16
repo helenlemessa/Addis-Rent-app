@@ -23,7 +23,8 @@ class PropertyDetailScreen extends StatefulWidget {
 
 class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
   int _currentImageIndex = 0;
-  bool _isFavorite = false;
+  
+  // Remove the local _isFavorite variable - we'll get it directly from provider
 
   @override
   void initState() {
@@ -45,7 +46,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
       await propertyProvider.loadProperty(widget.propertyId);
     }
 
-    // Check if favorite
+    // Check if favorite (but don't set state, just trigger the check)
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final favoriteProvider =
         Provider.of<FavoriteProvider>(context, listen: false);
@@ -55,7 +56,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
         userId: authProvider.currentUser!.id,
         propertyId: widget.propertyId,
       );
-      _isFavorite = favoriteProvider.isPropertyFavorite(widget.propertyId);
+      // No need to set state - we'll use Consumer to watch the provider
     }
   }
 
@@ -73,10 +74,8 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
       userId: authProvider.currentUser!.id,
       propertyId: widget.propertyId,
     );
-
-    setState(() {
-      _isFavorite = favoriteProvider.isPropertyFavorite(widget.propertyId);
-    });
+    
+    // No need to setState - Consumer will rebuild automatically
   }
 
   Future<void> _callLandlord(String phone) async {
@@ -162,12 +161,22 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen> {
               ),
             ),
             actions: [
-              IconButton(
-                icon: Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.red : Colors.white,
-                ),
-                onPressed: _toggleFavorite,
+              // FIX: Use Consumer to listen to favorite provider
+              Consumer2<AuthProvider, FavoriteProvider>(
+                builder: (context, authProvider, favoriteProvider, child) {
+                  final isLoggedIn = authProvider.isLoggedIn;
+                  final isFavorite = isLoggedIn 
+                      ? favoriteProvider.isPropertyFavorite(widget.propertyId)
+                      : false;
+                  
+                  return IconButton(
+                    icon: Icon(
+                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                      color: isFavorite ? Colors.red : Colors.white,
+                    ),
+                    onPressed: _toggleFavorite,
+                  );
+                },
               ),
             ],
           ),
